@@ -1,135 +1,337 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Calculator, TrendingUp, PiggyBank, Landmark, Coins, Shield, AlertTriangle, Zap } from "lucide-react";
+import { Calculator, TrendingUp, PiggyBank, Shield, Zap, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { useToast } from "@/hooks/use-toast";
+import { useGoals } from "@/contexts/GoalsContext";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { useLocation, useNavigate } from "react-router-dom";
+import jsPDF from "jspdf";
 
 const InvestmentPlanner = () => {
+  const { toast } = useToast();
+  const { addGoal, updateGoal, goals } = useGoals();
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  const [goalId, setGoalId] = useState<string>("");
   const [goalType, setGoalType] = useState("");
+  const [customGoalName, setCustomGoalName] = useState("");
   const [goalAmount, setGoalAmount] = useState("");
   const [targetYear, setTargetYear] = useState("");
+  const [targetMonth, setTargetMonth] = useState<string>("");
   const [riskAppetite, setRiskAppetite] = useState("");
+  const [investmentType, setInvestmentType] = useState("sip");
+  const [sipStartDate, setSipStartDate] = useState("");
+  const [lumpsumAvailable, setLumpsumAvailable] = useState("");
   const [showResults, setShowResults] = useState(false);
+  const [isCalculating, setIsCalculating] = useState(false);
+  interface PortfolioRecommendation {
+    portfolio: Record<string, number>;
+    expected_return: number;
+    portfolio_risk: number;
+    monthly_sip?: number;
+    lumpsum_amount?: number;
+    total_invested?: number;
+    expected_wealth?: number;
+    message?: string;
+    optimization_status?: string;
+    asset_allocation?: Record<string, number>;
+  }
+
+  const [portfolioRecommendation, setPortfolioRecommendation] = useState<PortfolioRecommendation | null>(null);
+  const [showExcessDialog, setShowExcessDialog] = useState(false);
+  const [pendingGoalData, setPendingGoalData] = useState<any>(null);
+
+  const currentYear = new Date().getFullYear();
+  const minYear = Math.max(2026, currentYear);
+  const monthOptions = useMemo(
+    () => [
+      { value: "1", label: "Jan" },
+      { value: "2", label: "Feb" },
+      { value: "3", label: "Mar" },
+      { value: "4", label: "Apr" },
+      { value: "5", label: "May" },
+      { value: "6", label: "Jun" },
+      { value: "7", label: "Jul" },
+      { value: "8", label: "Aug" },
+      { value: "9", label: "Sep" },
+      { value: "10", label: "Oct" },
+      { value: "11", label: "Nov" },
+      { value: "12", label: "Dec" },
+    ],
+    []
+  );
 
   // Asset-specific inflation rates (historical averages)
   const inflationRates: Record<string, number> = {
     car: 0.05, // 5%
     house: 0.08, // 8%
     education: 0.10, // 10%
-    retirement: 0.06, // 6%
     gold: 0.07, // 7%
-    other: 0.06, // 6%
+    custom: 0.06, // 6%
   };
 
-  // Risk-based investment options
-  const getRiskBasedOptions = (risk: string) => {
-    if (risk === "low") {
-      return [
-        {
-          name: "Fixed Deposit",
-          icon: Landmark,
-          returns: 7,
-          returnRange: "6-8%",
-          risk: "Low",
-          description: "Safe and guaranteed returns",
-          color: "success",
-        },
-        {
-          name: "Debt Mutual Funds",
-          icon: PiggyBank,
-          returns: 7.5,
-          returnRange: "7-8%",
-          risk: "Low",
-          description: "Stable income with low volatility",
-          color: "success",
-        },
-      ];
-    } else if (risk === "medium") {
-      return [
-        {
-          name: "SIP (Balanced Funds)",
-          icon: TrendingUp,
-          returns: 12,
-          returnRange: "10-14%",
-          risk: "Medium",
-          description: "Mix of equity and debt for balanced growth",
-          color: "primary",
-        },
-        {
-          name: "Index Funds",
-          icon: TrendingUp,
-          returns: 11,
-          returnRange: "10-12%",
-          risk: "Medium",
-          description: "Market-linked diversified returns",
-          color: "primary",
-        },
-      ];
-    } else {
-      return [
-        {
-          name: "Equity Stocks",
-          icon: TrendingUp,
-          returns: 18,
-          returnRange: "15-22%",
-          risk: "High",
-          description: "High growth potential with volatility",
-          color: "destructive",
-        },
-        {
-          name: "Equity Mutual Funds",
-          icon: Coins,
-          returns: 16,
-          returnRange: "14-18%",
-          risk: "High",
-          description: "Actively managed high-return portfolio",
-          color: "destructive",
-        },
-      ];
-    }
+  
+
+  const API_BASE_URL = "http://localhost:8000";
+
+  const getMonthsToTarget = () => {
+    if (!targetYear) return 0;
+    const monthValue = targetMonth ? parseInt(targetMonth) : 12;
+    const now = new Date();
+    const targetDate = new Date(parseInt(targetYear), monthValue - 1, 1);
+    const months = (targetDate.getFullYear() - now.getFullYear()) * 12 + (targetDate.getMonth() - now.getMonth());
+    return Math.max(months, 0);
   };
 
-  const calculateInvestmentPlan = () => {
+  const calculateInflatedValue = () => {
     const currentAmount = parseFloat(goalAmount);
-    const currentYear = new Date().getFullYear();
-    const years = parseInt(targetYear) - currentYear;
-    
-    // Get inflation rate based on goal type
+    const months = getMonthsToTarget();
+    const years = months / 12;
     const inflationRate = inflationRates[goalType] || 0.06;
-    
-    // Calculate future value with inflation: FV = PV × (1 + r)^n
     const futureValue = currentAmount * Math.pow(1 + inflationRate, years);
     
-    return { futureValue, inflationRate, years };
+    return { futureValue, inflationRate, years, months };
   };
 
-  const calculateMonthlyInvestment = (futureValue: number, years: number, annualReturn: number) => {
-    const monthlyRate = annualReturn / 12 / 100;
-    const months = years * 12;
-    
-    // PMT formula for monthly investment: FV × r / ((1 + r)^n - 1)
-    const monthlyInvestment = (futureValue * monthlyRate) / (Math.pow(1 + monthlyRate, months) - 1);
-    
-    return monthlyInvestment;
-  };
+  const handleCalculate = async () => {
+    if (!goalAmount || !targetYear || !goalType || !riskAppetite || !targetMonth) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
 
-  const handleCalculate = () => {
-    if (goalAmount && targetYear && goalType && riskAppetite) {
+    if (goalType === "custom" && !customGoalName.trim()) {
+      toast({
+        title: "Missing Goal Name",
+        description: "Please name your custom goal",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const targetYearNum = parseInt(targetYear);
+    if (targetYearNum < minYear) {
+      toast({
+        title: "Invalid Year",
+        description: `Target year must be ${minYear} or later`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const now = new Date();
+    const targetMonthNum = parseInt(targetMonth);
+    if (targetYearNum === now.getFullYear() && targetMonthNum <= now.getMonth() + 1) {
+      toast({
+        title: "Invalid Target Month",
+        description: "Target month must be in the future",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsCalculating(true);
+    
+    try {
+      const { futureValue, years, months, inflationRate } = calculateInflatedValue();
+      
+      // Determine time horizon based on years
+      let timeHorizon = "medium";
+      if (years <= 3) timeHorizon = "short";
+      else if (years > 7) timeHorizon = "long";
+
+      // Call backend API — years must be ≥ 1 for the backend validator
+      const apiYears = Math.max(1, Math.ceil(years));
+
+      const response = await fetch(`${API_BASE_URL}/api/recommend-portfolio`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          inflated_goal: futureValue,
+          years: apiYears,
+          risk_profile: riskAppetite,
+          time_horizon: timeHorizon,
+          investment_type: investmentType,
+          goal_type: goalType,
+          current_price: parseFloat(goalAmount)
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to get recommendation");
+      }
+
+      const data: PortfolioRecommendation = await response.json();
+      setPortfolioRecommendation(data);
       setShowResults(true);
+
+      const newGoalId = `goal-${Date.now()}`;
+      const calculatedMonthlySip = data.monthly_sip || (months ? futureValue / months : 0);
+      const calculatedLumpsum = data.lumpsum_amount || futureValue;
+      const goalName = goalType === "custom" ? customGoalName.trim() : goalType;
+
+      // Use data.portfolio which is what the backend returns
+      const allocation = data.portfolio || data.asset_allocation || {};
+
+      const baseGoal = {
+        id: newGoalId,
+        goalType,
+        goalName,
+        goalAmount: parseFloat(goalAmount),
+        targetYear: targetYearNum,
+        targetMonth: targetMonthNum,
+        riskProfile: riskAppetite,
+        investmentType,
+        inflationRate,
+        inflatedValue: futureValue,
+        years,
+        portfolio: allocation,
+        expectedReturn: data.expected_return || 0,
+        portfolioRisk: data.portfolio_risk || 0,
+        monthlySip: calculatedMonthlySip,
+        lumpsumAmount: calculatedLumpsum,
+        lumpsumAvailable: lumpsumAvailable ? parseFloat(lumpsumAvailable) : undefined,
+        message: data.message || "Portfolio calculated successfully",
+        optimizationStatus: data.optimization_status || "unknown",
+        isLocked: false,
+        status: "ongoing" as const,
+        createdAt: new Date().toISOString(),
+        sipStartDate: investmentType === "sip" ? sipStartDate : undefined,
+        sipPayments: [],
+        contributions: [],
+        lastInflationUpdate: new Date().toISOString(),
+      };
+
+      if (investmentType === "lumpsum" && lumpsumAvailable && parseFloat(lumpsumAvailable) > calculatedLumpsum) {
+        setPendingGoalData({ ...baseGoal, lumpsumAmount: calculatedLumpsum });
+        setShowExcessDialog(true);
+      } else {
+        addGoal(baseGoal);
+        setGoalId(newGoalId);
+      }
+
+      toast({
+        title: "Portfolio ready",
+        description: data.message || "Your investment plan is ready",
+      });
+
+    } catch (error) {
+      console.error("Error:", error);
+      
+      // Fallback: generate a rule-based allocation locally so the user
+      // still gets usable results even without the backend.
+      const { futureValue, years, months, inflationRate } = calculateInflatedValue();
+      const targetYearNum = parseInt(targetYear);
+      const targetMonthNum = parseInt(targetMonth);
+
+      const fallbackAllocations: Record<string, Record<string, number>> = {
+        low:    { Equity: 0.20, Gold: 0.15, Bonds: 0.50, Cash: 0.15 },
+        medium: { Equity: 0.45, Gold: 0.25, Bonds: 0.20, Cash: 0.10 },
+        high:   { Equity: 0.70, Gold: 0.15, Bonds: 0.10, Cash: 0.05 },
+      };
+      const allocation = fallbackAllocations[riskAppetite] || fallbackAllocations.medium;
+
+      // Estimate expected return from the allocation
+      const assetReturns: Record<string, number> = { Equity: 0.12, Gold: 0.08, Bonds: 0.065, Cash: 0.055 };
+      const expectedReturn = Object.entries(allocation).reduce((sum, [a, w]) => sum + w * (assetReturns[a] || 0.06), 0);
+      const portfolioRisk = riskAppetite === "high" ? 0.14 : riskAppetite === "medium" ? 0.09 : 0.05;
+
+      const r = expectedReturn / 12;
+      const n = Math.max(months, 12);
+      const monthlySip = r > 0 ? futureValue * r / (Math.pow(1 + r, n) - 1) : futureValue / n;
+      const lumpsumAmount = futureValue / Math.pow(1 + expectedReturn, Math.max(years, 1));
+
+      const fallbackData: PortfolioRecommendation = {
+        portfolio: allocation,
+        expected_return: expectedReturn,
+        portfolio_risk: portfolioRisk,
+        monthly_sip: Math.round(monthlySip),
+        lumpsum_amount: Math.round(lumpsumAmount),
+        optimization_status: "rule_based",
+        message: "Calculated locally (backend unavailable)",
+      };
+      setPortfolioRecommendation(fallbackData);
+      setShowResults(true);
+
+      const newGoalId = `goal-${Date.now()}`;
+      const calculatedMonthlySip = fallbackData.monthly_sip || (months ? futureValue / months : 0);
+      const calculatedLumpsum = fallbackData.lumpsum_amount || futureValue;
+      const goalName = goalType === "custom" ? customGoalName.trim() : goalType;
+
+      const baseGoal = {
+        id: newGoalId,
+        goalType,
+        goalName,
+        goalAmount: parseFloat(goalAmount),
+        targetYear: targetYearNum,
+        targetMonth: targetMonthNum,
+        riskProfile: riskAppetite,
+        investmentType,
+        inflationRate,
+        inflatedValue: futureValue,
+        years,
+        portfolio: allocation,
+        expectedReturn,
+        portfolioRisk,
+        monthlySip: calculatedMonthlySip,
+        lumpsumAmount: calculatedLumpsum,
+        lumpsumAvailable: lumpsumAvailable ? parseFloat(lumpsumAvailable) : undefined,
+        message: fallbackData.message,
+        optimizationStatus: "rule_based",
+        isLocked: false,
+        status: "ongoing" as const,
+        createdAt: new Date().toISOString(),
+        sipStartDate: investmentType === "sip" ? sipStartDate : undefined,
+        sipPayments: [],
+        contributions: [],
+        lastInflationUpdate: new Date().toISOString(),
+      };
+
+      addGoal(baseGoal);
+      setGoalId(newGoalId);
+
+      toast({
+        title: "Portfolio ready (offline mode)",
+        description: "Used rule-based allocation. Start the backend for Markowitz-optimized results.",
+      });
+    } finally {
+      setIsCalculating(false);
     }
   };
 
-  const results = showResults ? calculateInvestmentPlan() : null;
-  const investmentOptions = showResults && riskAppetite ? getRiskBasedOptions(riskAppetite) : [];
+  const handleExcessDecision = (acceptExcess: boolean) => {
+    if (!pendingGoalData) return;
+    const updatedGoal = {
+      ...pendingGoalData,
+      lumpsumAmount: acceptExcess
+        ? parseFloat(lumpsumAvailable)
+        : pendingGoalData.lumpsumAmount,
+    };
+    addGoal(updatedGoal);
+    setGoalId(updatedGoal.id);
+    setPendingGoalData(null);
+    setShowExcessDialog(false);
+  };
+
+  const results = showResults ? calculateInflatedValue() : null;
+  const animatePlanner = Boolean((location.state as { fromAddGoal?: boolean } | null)?.fromAddGoal);
 
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className={`min-h-screen bg-background ${animatePlanner ? "animate-slide-up" : ""}`}>
       <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2">Investment Planner</h1>
@@ -148,7 +350,7 @@ const InvestmentPlanner = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="goal">Goal Description</Label>
+                <Label htmlFor="goal">Goal Description *</Label>
                 <Select value={goalType} onValueChange={setGoalType}>
                   <SelectTrigger id="goal">
                     <SelectValue placeholder="Select your financial goal" />
@@ -157,15 +359,27 @@ const InvestmentPlanner = () => {
                     <SelectItem value="car">Buy a Car (5% inflation)</SelectItem>
                     <SelectItem value="house">Buy a House (8% inflation)</SelectItem>
                     <SelectItem value="education">Child's Education (10% inflation)</SelectItem>
-                    <SelectItem value="retirement">Retirement Fund (6% inflation)</SelectItem>
                     <SelectItem value="gold">Gold Investment (7% inflation)</SelectItem>
-                    <SelectItem value="other">Other (6% inflation)</SelectItem>
+                    <SelectItem value="custom">Custom Goal (6% inflation)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
+              {goalType === "custom" && (
+                <div className="space-y-2">
+                  <Label htmlFor="custom-goal">Name your goal</Label>
+                  <Input
+                    id="custom-goal"
+                    type="text"
+                    placeholder="e.g., Startup Fund"
+                    value={customGoalName}
+                    onChange={(e) => setCustomGoalName(e.target.value)}
+                  />
+                </div>
+              )}
+
               <div className="space-y-2">
-                <Label htmlFor="amount">Current Cost of Goal (₹)</Label>
+                <Label htmlFor="amount">Current Cost of Goal (₹) *</Label>
                 <Input
                   id="amount"
                   type="number"
@@ -176,19 +390,85 @@ const InvestmentPlanner = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="year">Target Year</Label>
-                <Input
-                  id="year"
-                  type="number"
-                  placeholder="e.g., 2030"
-                  value={targetYear}
-                  onChange={(e) => setTargetYear(e.target.value)}
-                  min={new Date().getFullYear() + 1}
-                />
+                <Label>Target Month & Year *</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <Select value={targetMonth} onValueChange={setTargetMonth}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Month" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {monthOptions.map((month) => (
+                        <SelectItem key={month.value} value={month.value}>
+                          {month.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    id="year"
+                    type="number"
+                    placeholder={`e.g., ${minYear}`}
+                    value={targetYear}
+                    onChange={(e) => setTargetYear(e.target.value)}
+                    min={minYear}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Minimum year: {minYear}</p>
               </div>
 
               <div className="space-y-3">
-                <Label>Risk Appetite</Label>
+                <Label>Investment Type *</Label>
+                <RadioGroup value={investmentType} onValueChange={setInvestmentType}>
+                  <div className="flex items-center space-x-2 p-3 rounded-lg border hover:bg-accent/50 transition-colors">
+                    <RadioGroupItem value="sip" id="sip" />
+                    <Label htmlFor="sip" className="flex items-center gap-2 cursor-pointer flex-1">
+                      <TrendingUp className="h-4 w-4 text-primary" />
+                      <div>
+                        <div className="font-medium">SIP (Systematic Investment Plan)</div>
+                        <div className="text-xs text-muted-foreground">Monthly investments</div>
+                      </div>
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2 p-3 rounded-lg border hover:bg-accent/50 transition-colors">
+                    <RadioGroupItem value="lumpsum" id="lumpsum" />
+                    <Label htmlFor="lumpsum" className="flex items-center gap-2 cursor-pointer flex-1">
+                      <PiggyBank className="h-4 w-4 text-success" />
+                      <div>
+                        <div className="font-medium">Lumpsum</div>
+                        <div className="text-xs text-muted-foreground">One-time investment</div>
+                      </div>
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              {investmentType === "sip" && (
+                <div className="space-y-2">
+                  <Label htmlFor="sip-start">SIP Start Date (optional)</Label>
+                  <Input
+                    id="sip-start"
+                    type="date"
+                    value={sipStartDate}
+                    onChange={(e) => setSipStartDate(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {investmentType === "lumpsum" && (
+                <div className="space-y-2">
+                  <Label htmlFor="lumpsum-available">Lumpsum Available (₹)</Label>
+                  <Input
+                    id="lumpsum-available"
+                    type="number"
+                    placeholder="e.g., 1200000"
+                    value={lumpsumAvailable}
+                    onChange={(e) => setLumpsumAvailable(e.target.value)}
+                  />
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <Label>Risk Appetite *</Label>
                 <RadioGroup value={riskAppetite} onValueChange={setRiskAppetite}>
                   <div className="flex items-center space-x-2 p-3 rounded-lg border hover:bg-accent/50 transition-colors">
                     <RadioGroupItem value="low" id="low" />
@@ -196,7 +476,7 @@ const InvestmentPlanner = () => {
                       <Shield className="h-4 w-4 text-success" />
                       <div>
                         <div className="font-medium">Low Risk</div>
-                        <div className="text-xs text-muted-foreground">FD, Bonds, Debt Funds (6-8% returns)</div>
+                        <div className="text-xs text-muted-foreground">Fixed deposits, government bonds, debt funds</div>
                       </div>
                     </Label>
                   </div>
@@ -206,7 +486,7 @@ const InvestmentPlanner = () => {
                       <TrendingUp className="h-4 w-4 text-primary" />
                       <div>
                         <div className="font-medium">Medium Risk</div>
-                        <div className="text-xs text-muted-foreground">Balanced Funds, Index Funds (10-14% returns)</div>
+                        <div className="text-xs text-muted-foreground">Balanced funds, index funds, hybrid mutual funds</div>
                       </div>
                     </Label>
                   </div>
@@ -216,7 +496,7 @@ const InvestmentPlanner = () => {
                       <Zap className="h-4 w-4 text-destructive" />
                       <div>
                         <div className="font-medium">High Risk</div>
-                        <div className="text-xs text-muted-foreground">Equity Stocks, Equity Funds (15-22% returns)</div>
+                        <div className="text-xs text-muted-foreground">Equity stocks, equity mutual funds, thematic/sectoral funds</div>
                       </div>
                     </Label>
                   </div>
@@ -227,9 +507,16 @@ const InvestmentPlanner = () => {
                 onClick={handleCalculate} 
                 className="w-full" 
                 size="lg"
-                disabled={!goalAmount || !targetYear || !goalType || !riskAppetite}
+                disabled={!goalAmount || !targetYear || !targetMonth || !goalType || !riskAppetite || (goalType === "custom" && !customGoalName.trim()) || isCalculating}
               >
-                Calculate Investment Plan
+                {isCalculating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Calculating...
+                  </>
+                ) : (
+                  "Calculate Investment Plan"
+                )}
               </Button>
 
               {showResults && results && (
@@ -240,7 +527,7 @@ const InvestmentPlanner = () => {
                       <p className="text-2xl font-bold text-foreground">₹{parseFloat(goalAmount).toLocaleString('en-IN')}</p>
                     </div>
                     <div className="text-center space-y-2">
-                      <p className="text-sm text-muted-foreground">Predicted Future Value ({results.years} years)</p>
+                      <p className="text-sm text-muted-foreground">Predicted Future Value ({results.months} months)</p>
                       <p className="text-3xl font-bold text-primary">₹{results.futureValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
                       <Badge variant="secondary">
                         +{((results.inflationRate * 100).toFixed(1))}% annual inflation
@@ -278,66 +565,170 @@ const InvestmentPlanner = () => {
               </Card>
             )}
 
-            {showResults && results && investmentOptions.map((option, index) => {
-              const Icon = option.icon;
-              const monthlyAmount = calculateMonthlyInvestment(results.futureValue, results.years, option.returns);
-              const totalInvested = monthlyAmount * results.years * 12;
-              const returns = results.futureValue - totalInvested;
-              const returnPercentage = (returns / totalInvested) * 100;
+            {showResults && results && portfolioRecommendation && (
+              <Card className="border-2 border-primary">
+                <CardHeader>
+                  <CardTitle className="text-2xl flex items-center gap-2">
+                    <TrendingUp className="h-6 w-6 text-primary" />
+                    Portfolio Plan
+                  </CardTitle>
+                  <CardDescription>Risk-based allocation matched to your goal</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Portfolio Allocation */}
+                  <div className="space-y-3">
+                    <h3 className="font-semibold">Asset Allocation</h3>
+                    {Object.entries(portfolioRecommendation.portfolio).map(([asset, weight]) => {
+                      const percentage = (weight * 100).toFixed(1);
+                      return (
+                        <div key={asset} className="space-y-1">
+                          <div className="flex justify-between text-sm">
+                            <span className="font-medium">{asset}</span>
+                            <span className="text-muted-foreground">{percentage}%</span>
+                          </div>
+                          <Progress value={weight * 100} className="h-2" />
+                        </div>
+                      );
+                    })}
+                  </div>
 
-              return (
-                <Card key={index} className="hover:shadow-lg transition-shadow border-2">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2">
-                        <Icon className="h-5 w-5 text-primary" />
-                        <CardTitle className="text-lg">{option.name}</CardTitle>
-                      </div>
-                      <Badge variant={option.risk === "Low" ? "secondary" : option.risk === "Medium" ? "default" : "destructive"}>
-                        {option.risk} Risk
-                      </Badge>
+                  {/* Investment Details */}
+                  <div className="grid grid-cols-2 gap-4 p-4 bg-accent/20 rounded-lg">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Expected Annual Return</p>
+                      <p className="text-xl font-bold text-success">
+                        {(portfolioRecommendation.expected_return * 100).toFixed(2)}%
+                      </p>
                     </div>
-                    <CardDescription>{option.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Expected Returns</p>
-                        <p className="text-lg font-bold text-success">{option.returnRange}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Monthly Investment Required</p>
-                        <p className="text-lg font-bold text-primary">
-                          ₹{monthlyAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                        </p>
-                      </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Portfolio Risk</p>
+                      <p className="text-xl font-bold text-primary">
+                        {(portfolioRecommendation.portfolio_risk * 100).toFixed(2)}%
+                      </p>
                     </div>
-                    
-                    <div className="p-3 bg-accent/20 rounded-lg space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Total to Invest</span>
-                        <span className="font-semibold">₹{totalInvested.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Expected Returns</span>
-                        <span className="font-semibold text-success">₹{returns.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Total Return</span>
-                        <span className="font-semibold text-success">+{returnPercentage.toFixed(1)}%</span>
-                      </div>
-                    </div>
+                  </div>
 
-                    <Button variant="outline" className="w-full">
-                      Choose this plan
+                  {/* SIP/Lumpsum Amount */}
+                  <div className="p-4 bg-gradient-to-br from-primary to-accent text-white rounded-lg border-2 border-primary/30">
+                    <div className="text-center space-y-2">
+                      <p className="text-sm text-white/90">
+                        {investmentType === "sip" ? "Monthly SIP Required" : "Lumpsum Required"}
+                      </p>
+                      <p className="text-3xl font-bold text-white">
+                        ₹{(investmentType === "sip" 
+                          ? (portfolioRecommendation.monthly_sip ?? 0)
+                          : (portfolioRecommendation.lumpsum_amount ?? 0)
+                        ).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      </p>
+                    </div>
+                    {investmentType === "sip" && portfolioRecommendation.monthly_sip && (
+                      <div className="mt-4 pt-4 border-t border-white/30">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-white/90">Monthly investment amount</span>
+                          <span className="font-semibold">
+                            ₹{portfolioRecommendation.monthly_sip.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button className="flex-1" onClick={() => {
+                      if (!goalId) {
+                        toast({
+                          title: "Goal not saved",
+                          description: "Please calculate and save the plan first.",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+                      const existing = goals.find((g) => g.id === goalId);
+                      if (existing) {
+                        const updated = {
+                          ...existing,
+                          isLocked: true,
+                          status: "ongoing",
+                          sipStartDate: investmentType === "sip" ? sipStartDate : existing.sipStartDate,
+                          contributions: investmentType === "lumpsum"
+                            ? [
+                                {
+                                  date: new Date().toISOString(),
+                                  amount: existing.lumpsumAmount || 0,
+                                  type: "lumpsum",
+                                  status: "paid",
+                                },
+                              ]
+                            : existing.contributions || [],
+                        };
+                        updateGoal(existing.id, updated);
+                      }
+                      toast({
+                        title: "Goal added to portfolio",
+                        description: "Your goal is now active and being tracked.",
+                      });
+                      navigate('/portfolio');
+                    }}>
+                      Add a Goal
                     </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                    <Button variant="outline" className="flex-1" onClick={() => {
+                      if (!goalId) {
+                        toast({
+                          title: "No report available",
+                          description: "Calculate your plan first.",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+                      const existing = goals.find((g) => g.id === goalId);
+                      if (!existing) return;
+                      const doc = new jsPDF();
+                      doc.setFontSize(16);
+                      doc.text("MoneyMentor Goal Report", 14, 18);
+                      doc.setFontSize(11);
+                      doc.text(`Goal: ${existing.goalName || existing.goalType}`, 14, 30);
+                      doc.text(`Target Date: ${existing.targetMonth}/${existing.targetYear}`, 14, 38);
+                      doc.text(`Goal Amount: ₹${existing.goalAmount.toLocaleString("en-IN")}`, 14, 46);
+                      doc.text(`Inflation Assumption: ${(existing.inflationRate || 0) * 100}%`, 14, 54);
+                      doc.text(`Inflation-adjusted Target: ₹${existing.inflatedValue?.toLocaleString("en-IN")}`, 14, 62);
+                      doc.text(`Investment Type: ${existing.investmentType}`, 14, 70);
+                      doc.text(`Monthly SIP / Lumpsum: ₹${(existing.investmentType === "sip" ? existing.monthlySip : existing.lumpsumAmount)?.toLocaleString("en-IN")}`, 14, 78);
+                      doc.text("Asset Allocation:", 14, 90);
+                      let y = 98;
+                      if (existing.portfolio) {
+                        Object.entries(existing.portfolio).forEach(([asset, weight]) => {
+                          doc.text(`- ${asset}: ${(Number(weight) * 100).toFixed(1)}%`, 18, y);
+                          y += 8;
+                        });
+                      }
+                      doc.text("Progress till date:", 14, y + 6);
+                      doc.text(`Contributed: ₹${(existing.contributions || []).filter((c) => c.status !== "pending").reduce((sum, c) => sum + c.amount, 0).toLocaleString("en-IN")}`, 18, y + 14);
+                      doc.save(`goal-report-${existing.id}.pdf`);
+                    }}>
+                      Download Report
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </div>
+
+      <AlertDialog open={showExcessDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excess Lumpsum Detected</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your investment exceeds the required amount. Do you want to invest the extra amount?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => handleExcessDecision(false)}>No, reduce to required</AlertDialogCancel>
+            <AlertDialogAction onClick={() => handleExcessDecision(true)}>Yes, invest extra</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

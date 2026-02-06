@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PiggyBank, Shield } from "lucide-react";
+import { PiggyBank } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 
@@ -12,18 +12,113 @@ const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [userType, setUserType] = useState<"user" | "admin">("user");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [signupName, setSignupName] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [signupConfirm, setSignupConfirm] = useState("");
+
+  useEffect(() => {
+    const session = localStorage.getItem("authSession");
+    if (session) {
+      navigate("/dashboard");
+    }
+  }, [navigate]);
+
+  const loadUsers = () => {
+    const stored = localStorage.getItem("authUsers");
+    if (!stored) return [] as Array<{ name: string; email: string; password: string }>;
+    return JSON.parse(stored) as Array<{ name: string; email: string; password: string }>;
+  };
+
+  const saveUsers = (users: Array<{ name: string; email: string; password: string }>) => {
+    localStorage.setItem("authUsers", JSON.stringify(users));
+  };
 
   const handleSubmit = async (e: React.FormEvent, action: "login" | "signup") => {
     e.preventDefault();
     setIsLoading(true);
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (action === "login") {
+      if (!emailRegex.test(loginEmail) || !loginPassword) {
+        setIsLoading(false);
+        toast({
+          title: "Invalid login details",
+          description: "Please enter a valid email and password.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const users = loadUsers();
+      const user = users.find((u) => u.email.toLowerCase() === loginEmail.toLowerCase());
+      const demoMatch = loginEmail === "demo@moneymentor.com" && loginPassword === "demo123";
+      if (!user && !demoMatch) {
+        setIsLoading(false);
+        toast({
+          title: "Authentication failed",
+          description: "Account not found. Please sign up first.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (user && user.password !== loginPassword) {
+        setIsLoading(false);
+        toast({
+          title: "Authentication failed",
+          description: "Incorrect password.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    if (action === "signup") {
+      if (!signupName || !emailRegex.test(signupEmail)) {
+        setIsLoading(false);
+        toast({
+          title: "Invalid signup details",
+          description: "Please provide your name and a valid email address.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (signupPassword.length < 6 || signupPassword !== signupConfirm) {
+        setIsLoading(false);
+        toast({
+          title: "Password issue",
+          description: "Passwords must match and be at least 6 characters long.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const users = loadUsers();
+      const exists = users.some((u) => u.email.toLowerCase() === signupEmail.toLowerCase());
+      if (exists) {
+        setIsLoading(false);
+        toast({
+          title: "Account exists",
+          description: "Please log in with your existing account.",
+          variant: "destructive",
+        });
+        return;
+      }
+      saveUsers([...users, { name: signupName, email: signupEmail, password: signupPassword }]);
+    }
+
     // Simulate authentication
     setTimeout(() => {
       setIsLoading(false);
+      localStorage.setItem("authSession", JSON.stringify({
+        email: action === "login" ? loginEmail : signupEmail,
+        name: action === "login" ? "User" : signupName,
+        loginAt: new Date().toISOString(),
+      }));
       toast({
         title: action === "login" ? "Welcome back!" : "Account created!",
-        description: `Successfully ${action === "login" ? "logged in" : "signed up"} as ${userType}`,
+        description: `Successfully ${action === "login" ? "logged in" : "signed up"}`,
       });
       navigate("/dashboard");
     }, 1500);
@@ -42,24 +137,10 @@ const Auth = () => {
 
         <Card className="border-2">
           <CardHeader>
-            <div className="flex gap-2 mb-4">
-              <Button
-                variant={userType === "user" ? "default" : "outline"}
-                className="flex-1 gap-2"
-                onClick={() => setUserType("user")}
-              >
-                <PiggyBank className="h-4 w-4" />
-                User
-              </Button>
-              <Button
-                variant={userType === "admin" ? "default" : "outline"}
-                className="flex-1 gap-2"
-                onClick={() => setUserType("admin")}
-              >
-                <Shield className="h-4 w-4" />
-                Admin
-              </Button>
-            </div>
+            <CardTitle>Access Your Account</CardTitle>
+            <CardDescription>
+              Sample credentials - Email: <span className="font-semibold">demo@moneymentor.com</span> | Password: <span className="font-semibold">demo123</span>
+            </CardDescription>
           </CardHeader>
 
           <Tabs defaultValue="login" className="w-full">
@@ -77,6 +158,8 @@ const Auth = () => {
                       id="login-email"
                       type="email"
                       placeholder="you@example.com"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
                       required
                     />
                   </div>
@@ -86,6 +169,8 @@ const Auth = () => {
                       id="login-password"
                       type="password"
                       placeholder="••••••••"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
                       required
                     />
                   </div>
@@ -107,6 +192,8 @@ const Auth = () => {
                       id="signup-name"
                       type="text"
                       placeholder="John Doe"
+                      value={signupName}
+                      onChange={(e) => setSignupName(e.target.value)}
                       required
                     />
                   </div>
@@ -116,6 +203,8 @@ const Auth = () => {
                       id="signup-email"
                       type="email"
                       placeholder="you@example.com"
+                      value={signupEmail}
+                      onChange={(e) => setSignupEmail(e.target.value)}
                       required
                     />
                   </div>
@@ -125,6 +214,8 @@ const Auth = () => {
                       id="signup-password"
                       type="password"
                       placeholder="••••••••"
+                      value={signupPassword}
+                      onChange={(e) => setSignupPassword(e.target.value)}
                       required
                     />
                   </div>
@@ -134,6 +225,8 @@ const Auth = () => {
                       id="signup-confirm"
                       type="password"
                       placeholder="••••••••"
+                      value={signupConfirm}
+                      onChange={(e) => setSignupConfirm(e.target.value)}
                       required
                     />
                   </div>

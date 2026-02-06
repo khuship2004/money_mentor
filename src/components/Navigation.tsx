@@ -1,9 +1,10 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { LayoutDashboard, Calculator, PieChart, LogOut, PiggyBank } from "lucide-react";
 
 const Navigation = () => {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const navItems = [
     { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -12,6 +13,11 @@ const Navigation = () => {
   ];
 
   const isActive = (path: string) => location.pathname === path;
+
+  const handleLogout = () => {
+    localStorage.removeItem("authSession");
+    navigate("/auth");
+  };
 
   return (
     <nav className="border-b bg-card">
@@ -39,12 +45,10 @@ const Navigation = () => {
             })}
           </div>
 
-          <Link to="/">
-            <Button variant="outline" className="gap-2">
-              <LogOut className="h-4 w-4" />
-              Logout
-            </Button>
-          </Link>
+          <Button variant="outline" className="gap-2" onClick={handleLogout}>
+            <LogOut className="h-4 w-4" />
+            Logout
+          </Button>
         </div>
 
         {/* Mobile Navigation */}
