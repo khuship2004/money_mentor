@@ -13,6 +13,7 @@ from database import init_db, get_db, UserGoal
 from data_fetcher import DataFetcher, calculate_returns
 from portfolio_optimizer import PortfolioOptimizer, calculate_sip, calculate_lumpsum
 from scheduler import DataScheduler
+from inflation_models import get_inflation_provider, InflationRatesProvider
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -261,6 +262,172 @@ async def health_check(db: Session = Depends(get_db)):
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
+
+
+# ==========================================
+# INFLATION RATES API ENDPOINTS
+# ==========================================
+
+@app.get("/api/inflation-rates")
+async def get_all_inflation_rates():
+    """
+    Get all inflation rates from the models
+    Returns: Gold, Real Estate, Car, and Education inflation rates
+    """
+    try:
+        provider = get_inflation_provider()
+        rates = provider.get_all_inflation_rates()
+        
+        return {
+            "status": "success",
+            "data": rates,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching inflation rates: {str(e)}")
+
+
+@app.get("/api/inflation-rates/{category}")
+async def get_inflation_rate(category: str):
+    """
+    Get inflation rate for a specific category
+    Categories: gold, house/real_estate, car/vehicle, education/children_education
+    """
+    try:
+        provider = get_inflation_provider()
+        rate = provider.get_inflation_rate(category)
+        
+        if rate is None:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Category '{category}' not found. Valid categories: gold, house, car, education"
+            )
+        
+        return {
+            "status": "success",
+            "category": category,
+            "data": rate,
+            "timestamp": datetime.now().isoformat()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching inflation rate: {str(e)}")
+
+
+@app.get("/api/inflation-rates-simple")
+async def get_inflation_rates_simple():
+    """
+    Get simplified inflation rates for UI consumption
+    Uses best_estimate (weighted combination of all methods) as primary rate
+    Returns rate as decimal values ready for calculations
+    """
+    try:
+        provider = get_inflation_provider()
+        rates = provider.get_all_inflation_rates()
+        
+        # Use best_estimate if available, fallback to cagr
+        def get_best_rate(category_data):
+            return category_data.get('best_estimate', category_data.get('cagr', 6.0))
+        
+        simple_rates = {
+            "gold": get_best_rate(rates['gold']) / 100,
+            "house": get_best_rate(rates['real_estate']) / 100,
+            "car": get_best_rate(rates['car']) / 100,
+            "education": get_best_rate(rates['education']) / 100,
+            "custom": 0.06  # Default 6% for custom goals
+        }
+        
+        # Also provide display-friendly format with all calculation methods
+        display_rates = {
+            "gold": {
+                "rate": get_best_rate(rates['gold']),
+                "cagr": rates['gold'].get('cagr'),
+                "geometric_mean": rates['gold'].get('geometric_mean'),
+                "regression_rate": rates['gold'].get('regression_rate'),
+                "regression_r_squared": rates['gold'].get('regression_r_squared'),
+                "weighted_average": rates['gold'].get('weighted_average'),
+                "method_used": rates['gold'].get('method_used', 'cagr'),
+                "description": rates['gold']['description'],
+                "period": rates['gold']['period'],
+                "data_points_used": rates['gold'].get('data_points_used', 'N/A')
+            },
+            "house": {
+                "rate": get_best_rate(rates['real_estate']),
+                "cagr": rates['real_estate'].get('cagr'),
+                "geometric_mean": rates['real_estate'].get('geometric_mean'),
+                "regression_rate": rates['real_estate'].get('regression_rate'),
+                "regression_r_squared": rates['real_estate'].get('regression_r_squared'),
+                "method_used": rates['real_estate'].get('method_used', 'cagr'),
+                "description": rates['real_estate']['description'],
+                "period": rates['real_estate']['period'],
+                "city_wise": rates['real_estate'].get('city_wise', {})
+            },
+            "car": {
+                "rate": get_best_rate(rates['car']),
+                "cagr": rates['car'].get('cagr'),
+                "geometric_mean": rates['car'].get('geometric_mean'),
+                "regression_rate": rates['car'].get('regression_rate'),
+                "regression_r_squared": rates['car'].get('regression_r_squared'),
+                "method_used": rates['car'].get('method_used', 'cagr'),
+                "description": rates['car']['description'],
+                "period": rates['car']['period']
+            },
+            "education": {
+                "rate": get_best_rate(rates['education']),
+                "cagr": rates['education'].get('cagr'),
+                "method_used": rates['education'].get('method_used', 'cagr'),
+                "description": rates['education']['description'],
+                "period": rates['education']['period'],
+                "categories": rates['education'].get('categories', {})
+            }
+        }
+        
+        return {
+            "status": "success",
+            "rates": simple_rates,
+            "display": display_rates,
+            "calculation_methods": [
+                "cagr - Compound Annual Growth Rate (first & last year only)",
+                "geometric_mean - Geometric mean of all YoY returns (uses all years)",
+                "regression_rate - Exponential regression on all data points",
+                "weighted_average - Recent years weighted higher",
+                "best_estimate - Weighted combination of all methods"
+            ],
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching inflation rates: {str(e)}")
+
+
+class FutureValueRequest(BaseModel):
+    """Request model for future value calculation"""
+    current_value: float = Field(..., gt=0, description="Current value in INR")
+    category: str = Field(..., description="Category: gold, house, car, education")
+    years: int = Field(..., gt=0, le=50, description="Number of years for projection")
+
+
+@app.post("/api/calculate-future-value")
+async def calculate_future_value(request: FutureValueRequest):
+    """
+    Calculate inflation-adjusted future value for a given category
+    Uses the inflation model's CAGR for the specified category
+    """
+    try:
+        provider = get_inflation_provider()
+        result = provider.calculate_future_value(
+            current_value=request.current_value,
+            category=request.category,
+            years=request.years
+        )
+        
+        return {
+            "status": "success",
+            "data": result,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error calculating future value: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
