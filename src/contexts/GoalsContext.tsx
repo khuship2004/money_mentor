@@ -25,8 +25,12 @@ export interface Goal {
   createdAt?: string;
   sipStartDate?: string;
   sipPayments?: Array<{ month: string; amount: number; status: "paid" | "pending" }>;
-  contributions?: Array<{ date: string; amount: number; type: "sip" | "lumpsum"; status?: "paid" | "pending" }>;
+  contributions?: Array<{ date: string; amount: number; type: "sip" | "lumpsum" | "installment"; status?: "paid" | "pending" }>;
   lastInflationUpdate?: string;
+  completedInstallments?: number;
+  isHybrid?: boolean;
+  hybridSip?: number;
+  lumpsumInvested?: boolean;
 }
 
 interface GoalsContextType {

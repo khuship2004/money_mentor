@@ -38,6 +38,14 @@ const formatMonthYear = (month?: number, year?: number) => {
   return date.toLocaleString("en-IN", { month: "short", year: "numeric" });
 };
 
+const formatYears = (years?: number) => {
+  if (!years) return "0";
+  // Round to nearest 0.5
+  const rounded = Math.round(years * 2) / 2;
+  // If whole number, display without decimal
+  return rounded % 1 === 0 ? rounded.toString() : rounded.toFixed(1);
+};
+
 const GoalDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -182,7 +190,7 @@ const GoalDetails = () => {
                 </div>
                 <div className="p-4 rounded-lg border">
                   <p className="text-xs text-muted-foreground">Timeline</p>
-                  <p className="text-lg font-bold">{goal.years} years</p>
+                  <p className="text-lg font-bold">{formatYears(goal.years)} years</p>
                   <p className="text-xs text-muted-foreground">Inflation rate: {((goal.inflationRate || 0) * 100).toFixed(1)}%</p>
                 </div>
               </div>
