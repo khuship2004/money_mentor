@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, Target, ArrowRight, BarChart3, MapPin, GraduationCap, Info } from "lucide-react";
+import { TrendingUp, TrendingDown, Target, ArrowRight, BarChart3, MapPin, GraduationCap, Info, Globe, Plane } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -206,7 +206,7 @@ const Dashboard = () => {
                                 <Info className="h-4 w-4 text-muted-foreground" />
                               </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-md">
+                            <DialogContent className={card.dataKey === 'education' ? "max-w-lg max-h-[80vh] overflow-y-auto" : "max-w-md"}>
                               <DialogHeader>
                                 <DialogTitle className="flex items-center gap-2">
                                   <span className="text-xl">{card.icon}</span>
@@ -275,17 +275,21 @@ const Dashboard = () => {
                                   <div className="space-y-2">
                                     <h4 className="font-semibold text-sm flex items-center gap-2">
                                       <GraduationCap className="h-4 w-4" />
-                                      Education Categories
+                                      Domestic Education Categories
                                     </h4>
                                     <div className="space-y-3 text-sm max-h-48 overflow-y-auto">
-                                      {Object.entries(rateData.categories).map(([category, data]: [string, any]) => (
+                                      {Object.entries(rateData.categories)
+                                        .filter(([category]) => category !== 'international')
+                                        .map(([category, data]: [string, any]) => (
                                         <div key={category} className="p-2 bg-muted rounded-md">
-                                          <p className="font-semibold capitalize mb-1">{category.replace('_', ' ')}</p>
+                                          <p className="font-semibold capitalize mb-1">{category.replaceAll('_', ' ')}</p>
                                           {typeof data === 'object' ? (
                                             <div className="grid grid-cols-2 gap-1 text-xs">
-                                              {Object.entries(data).map(([key, value]) => (
+                                              {Object.entries(data)
+                                                .filter(([key]) => key !== 'note')
+                                                .map(([key, value]) => (
                                                 <div key={key} className="flex justify-between">
-                                                  <span className="text-muted-foreground capitalize">{key.replace('_', ' ')}</span>
+                                                  <span className="text-muted-foreground capitalize">{key.replaceAll('_', ' ')}</span>
                                                   <span>{typeof value === 'number' ? `${value.toFixed(1)}%` : value}</span>
                                                 </div>
                                               ))}
@@ -295,6 +299,92 @@ const Dashboard = () => {
                                           )}
                                         </div>
                                       ))}
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {/* International Education Section */}
+                                {rateData?.categories?.international && (
+                                  <div className="space-y-2 pt-2 border-t">
+                                    <h4 className="font-semibold text-sm flex items-center gap-2">
+                                      <Plane className="h-4 w-4" />
+                                      International Higher Studies (For Indian Students)
+                                    </h4>
+                                    <p className="text-xs text-muted-foreground mb-2">
+                                      Inflation includes tuition increase + INR depreciation | Period: {rateData.categories.international.period}
+                                    </p>
+                                    <div className="space-y-2 text-sm max-h-64 overflow-y-auto">
+                                      {/* Country-wise breakdown */}
+                                      {['usa', 'uk', 'germany', 'canada', 'australia'].map((country) => {
+                                        const countryData = rateData.categories.international[country];
+                                        if (!countryData) return null;
+                                        const flags: Record<string, string> = { usa: '🇺🇸', uk: '🇬🇧', germany: '🇩🇪', canada: '🇨🇦', australia: '🇦🇺' };
+                                        const names: Record<string, string> = { usa: 'USA', uk: 'UK', germany: 'Germany', canada: 'Canada', australia: 'Australia' };
+                                        return (
+                                          <div key={country} className="p-2 bg-muted rounded-md">
+                                            <div className="flex items-center justify-between mb-1">
+                                              <span className="font-semibold flex items-center gap-1">
+                                                <span>{flags[country]}</span> {names[country]}
+                                              </span>
+                                              <span className="text-primary font-bold">{countryData.average?.toFixed(1)}%</span>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-1 text-xs">
+                                              {Object.entries(countryData)
+                                                .filter(([key]) => !['average', 'note'].includes(key))
+                                                .map(([key, value]) => {
+                                                  const isCostField = key.includes('cost') || key.includes('lakhs');
+                                                  let displayValue: string;
+                                                  if (isCostField) {
+                                                    displayValue = `₹${String(value)}L/yr`;
+                                                  } else if (typeof value === 'number') {
+                                                    displayValue = `${value.toFixed(1)}%`;
+                                                  } else {
+                                                    displayValue = String(value);
+                                                  }
+                                                  return (
+                                                    <div key={key} className="flex justify-between">
+                                                      <span className="text-muted-foreground capitalize">{key.replaceAll('_', ' ')}</span>
+                                                      <span>{displayValue}</span>
+                                                    </div>
+                                                  );
+                                                })}
+                                            </div>
+                                            {countryData.note && (
+                                              <p className="text-xs text-green-600 mt-1">💡 {countryData.note}</p>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                      
+                                      {/* Program Durations */}
+                                      {rateData.categories.international.program_durations && (
+                                        <div className="p-2 bg-primary/10 rounded-md">
+                                          <p className="font-semibold text-xs mb-1 flex items-center gap-1">
+                                            <Globe className="h-3 w-3" /> Program Durations
+                                          </p>
+                                          <div className="grid grid-cols-1 gap-1 text-xs">
+                                            {Object.entries(rateData.categories.international.program_durations).map(([key, value]) => (
+                                              <div key={key} className="flex justify-between">
+                                                <span className="text-muted-foreground capitalize">{key.replaceAll('_', ' ')}</span>
+                                                <span>{value as string}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                      
+                                      {/* Overall International Average */}
+                                      <div className="p-2 bg-blue-50 dark:bg-blue-950 rounded-md border border-blue-200 dark:border-blue-800">
+                                        <div className="flex justify-between items-center">
+                                          <span className="font-semibold text-sm">🌍 Avg International Inflation</span>
+                                          <span className="text-blue-600 dark:text-blue-400 font-bold text-lg">
+                                            {rateData.categories.international.average?.toFixed(1)}%
+                                          </span>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                          {rateData.categories.international.note}
+                                        </p>
+                                      </div>
                                     </div>
                                   </div>
                                 )}

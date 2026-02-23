@@ -6,31 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useGoals } from "@/contexts/GoalsContext";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
-import { ArrowLeft, Calendar, Target, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Calendar, Target } from "lucide-react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const COLORS = ["#7c6340", "#a08060", "#5b8a72", "#b8a080", "#4a7c8c", "#c4b090"];
-
-const RISK_FUND_MAP: Record<string, Array<{ label: string; description: string; examples: string[] }>> = {
-  low: [
-    { label: "Fixed Deposits", description: "Invest in bank fixed deposits", examples: ["SBI FD", "HDFC FD", "ICICI FD"] },
-    { label: "Government Bonds", description: "Invest in sovereign-backed securities", examples: ["RBI Savings Bonds", "G-Sec", "PPF"] },
-    { label: "Debt Funds", description: "Invest in fixed-income securities", examples: ["HDFC Short Term Debt", "SBI Magnum Gilt", "ICICI Pru All Seasons Bond"] },
-  ],
-  medium: [
-    { label: "Balanced Funds", description: "Invest in a combination of debt and equity", examples: ["HDFC Balanced Advantage", "ICICI Pru Balanced Advantage"] },
-    { label: "Index Funds", description: "Track market indices for steady growth", examples: ["UTI Nifty 50", "HDFC Index S&P BSE Sensex", "Nippon India Nifty 50"] },
-    { label: "Hybrid Mutual Funds", description: "Offers benefit of asset allocation and diversification", examples: ["SBI Equity Hybrid", "Mirae Asset Hybrid"] },
-  ],
-  high: [
-    { label: "Equity Stocks", description: "Invest in equities and equity related instruments", examples: ["Nifty 50 stocks", "Mid-cap stocks", "Small-cap stocks"] },
-    { label: "Equity Mutual Funds", description: "For long-term capital growth", examples: ["Axis Bluechip", "SBI Small Cap", "Mirae Asset Large Cap"] },
-    { label: "Thematic / Sectoral Funds", description: "Tailored for specific themes or sectors", examples: ["ICICI Technology", "SBI PSU Fund", "Nippon India Pharma"] },
-  ],
-};
 
 const formatMonthYear = (month?: number, year?: number) => {
   if (!month || !year) return year?.toString() || "";
@@ -87,7 +69,6 @@ const GoalDetails = () => {
   const investmentAmount = goal.investmentType === "sip" ? goal.monthlySip : goal.lumpsumAmount;
   const totalContributed = (goal.contributions || []).filter((c) => c.status !== "pending").reduce((sum, c) => sum + c.amount, 0);
   const progress = goal.inflatedValue ? Math.min((totalContributed / goal.inflatedValue) * 100, 100) : 0;
-  const riskFunds = RISK_FUND_MAP[goal.riskProfile] || RISK_FUND_MAP.medium;
 
   const handleEditOpen = () => {
     setEditValues({
@@ -234,32 +215,6 @@ const GoalDetails = () => {
             </CardContent>
           </Card>
         </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Recommended Fund Categories</CardTitle>
-            <CardDescription>Based on your {goal.riskProfile} risk profile</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {riskFunds.map((fund) => (
-                <Card key={fund.label} className="border hover:shadow-md transition-shadow">
-                  <CardHeader className="pb-2 bg-primary/5 rounded-t-lg">
-                    <CardTitle className="text-base text-primary">{fund.label}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-4 space-y-2">
-                    <p className="text-sm text-muted-foreground">{fund.description}</p>
-                    <div className="space-y-1">
-                      {fund.examples.map((ex) => (
-                        <div key={ex} className="flex items-center gap-2 text-xs"><CheckCircle2 className="h-3 w-3 text-success flex-shrink-0" /><span>{ex}</span></div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
 
         <Card>
           <CardHeader>

@@ -149,14 +149,46 @@ const Portfolio = () => {
   };
 
   const getInstallmentInfo = (goal: typeof goals[0]) => {
-    const monthlySip = goal.isHybrid ? (goal.hybridSip || 0) : (goal.monthlySip || 0);
-    const inflatedValue = goal.inflatedValue || goal.goalAmount;
-    // For hybrid, we need to subtract the lumpsum from the target for SIP installments
-    const lumpsumAmount = goal.isHybrid ? (goal.lumpsumAmount || 0) : 0;
-    const sipTarget = goal.isHybrid ? (inflatedValue - lumpsumAmount) : inflatedValue;
-    if (monthlySip <= 0) return { total: 0, completed: 0 };
-    const totalInstallments = Math.ceil(sipTarget / monthlySip);
-    const completedInstallments = goal.completedInstallments || 0;
+    const now = new Date();
+    const nowYear = now.getFullYear();
+    const nowMonth = now.getMonth(); // 0-indexed
+    
+    // Get SIP start date - if not set, use createdAt or current date
+    let startYear = nowYear;
+    let startMonth = nowMonth;
+    
+    if (goal.sipStartDate && goal.sipStartDate.trim() !== "") {
+      const parsed = new Date(goal.sipStartDate);
+      startYear = parsed.getFullYear();
+      startMonth = parsed.getMonth();
+    } else if (goal.createdAt && goal.createdAt.trim() !== "") {
+      const parsed = new Date(goal.createdAt);
+      startYear = parsed.getFullYear();
+      startMonth = parsed.getMonth();
+    }
+    
+    // Get target date from goal
+    const targetYear = goal.targetYear;
+    const targetMonth = (goal.targetMonth || 12) - 1; // Convert 1-indexed to 0-indexed, default to December
+    
+    // Calculate total installments = months from start to target
+    const totalInstallments = Math.max(1, 
+      (targetYear - startYear) * 12 + (targetMonth - startMonth)
+    );
+    
+    // Calculate completed installments = months elapsed from start to now
+    let completedInstallments = 0;
+    const startIsInFuture = (startYear > nowYear) || (startYear === nowYear && startMonth > nowMonth);
+    
+    if (!startIsInFuture) {
+      const monthsElapsed = (nowYear - startYear) * 12 + (nowMonth - startMonth);
+      // Add 1 because the first month counts as installment 1
+      completedInstallments = Math.max(0, monthsElapsed + 1);
+    }
+    
+    // Cap at total installments
+    completedInstallments = Math.min(completedInstallments, totalInstallments);
+    
     return { total: totalInstallments, completed: completedInstallments };
   };
 

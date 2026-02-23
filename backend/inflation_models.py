@@ -406,6 +406,58 @@ class InflationRatesProvider:
             coaching_rates['upsc'] * 0.10
         )
         
+        # International Higher Education (for Indian students going abroad)
+        # Rates include both tuition increase AND INR depreciation effect
+        # Data period: 2010-2025 (15 years)
+        international_rates = {
+            'usa': {
+                'public_university': 9.82,      # State universities
+                'private_ivy_league': 9.50,     # Top private universities
+                'community_college': 10.24,     # 2-year programs
+                'average': 9.66
+            },
+            'uk': {
+                'russell_group': 9.75,          # Oxford, Cambridge, Imperial
+                'standard_university': 9.59,
+                'average': 9.67
+            },
+            'germany': {
+                'public_free_tuition': 7.11,    # Only living costs (tuition is free)
+                'private_university': 9.35,
+                'average': 8.23
+            },
+            'canada': {
+                'top_universities': 9.30,       # U of T, McGill, UBC
+                'standard': 9.88,
+                'average': 9.59
+            },
+            'australia': {
+                'group_of_eight': 7.97,         # Melbourne, Sydney, etc.
+                'standard': 8.34,
+                'average': 8.16
+            }
+        }
+        international_avg = (
+            international_rates['usa']['average'] * 0.35 +      # USA most popular
+            international_rates['uk']['average'] * 0.20 +       # UK second choice
+            international_rates['germany']['average'] * 0.15 +  # Germany growing
+            international_rates['canada']['average'] * 0.20 +   # Canada popular
+            international_rates['australia']['average'] * 0.10  # Australia
+        )
+        
+        # Program costs in 2025 (in Rs. Lakhs per year)
+        program_costs_2025 = {
+            'usa_public': 41.0,
+            'usa_private': 80.3,
+            'uk_russell': 51.6,
+            'uk_standard': 39.2,
+            'germany_public': 15.3,
+            'canada_top': 47.1,
+            'australia_go8': 42.6,
+            'india_iit': 12.0,
+            'india_iim': 55.0
+        }
+        
         # Overall Education Inflation - weighted by spending pattern
         # Parents spend most on school (12+ years), then college (3-5 years), then coaching
         overall_rate = (
@@ -442,6 +494,48 @@ class InflationRatesProvider:
                     **{k: round(v, 2) for k, v in coaching_rates.items()},
                     'average': round(coaching_avg, 2),
                     'note': 'Annual coaching/tuition fees'
+                },
+                'international': {
+                    'usa': {
+                        'public': round(international_rates['usa']['public_university'], 2),
+                        'private_ivy': round(international_rates['usa']['private_ivy_league'], 2),
+                        'average': round(international_rates['usa']['average'], 2),
+                        'cost_per_year_lakhs': program_costs_2025['usa_public'],
+                        'cost_private_lakhs': program_costs_2025['usa_private']
+                    },
+                    'uk': {
+                        'russell_group': round(international_rates['uk']['russell_group'], 2),
+                        'standard': round(international_rates['uk']['standard_university'], 2),
+                        'average': round(international_rates['uk']['average'], 2),
+                        'cost_per_year_lakhs': program_costs_2025['uk_russell']
+                    },
+                    'germany': {
+                        'public_free_tuition': round(international_rates['germany']['public_free_tuition'], 2),
+                        'private': round(international_rates['germany']['private_university'], 2),
+                        'average': round(international_rates['germany']['average'], 2),
+                        'cost_per_year_lakhs': program_costs_2025['germany_public'],
+                        'note': 'Public universities have FREE tuition - only living costs'
+                    },
+                    'canada': {
+                        'top_universities': round(international_rates['canada']['top_universities'], 2),
+                        'standard': round(international_rates['canada']['standard'], 2),
+                        'average': round(international_rates['canada']['average'], 2),
+                        'cost_per_year_lakhs': program_costs_2025['canada_top']
+                    },
+                    'australia': {
+                        'group_of_eight': round(international_rates['australia']['group_of_eight'], 2),
+                        'standard': round(international_rates['australia']['standard'], 2),
+                        'average': round(international_rates['australia']['average'], 2),
+                        'cost_per_year_lakhs': program_costs_2025['australia_go8']
+                    },
+                    'average': round(international_avg, 2),
+                    'note': 'Inflation for Indian students (includes INR depreciation)',
+                    'period': '2010-2025',
+                    'program_durations': {
+                        'masters_mba': '2 years',
+                        'undergraduate': '4 years',
+                        'ug_plus_pg': '6 years (After 10th to PG)'
+                    }
                 }
             }
         }
