@@ -176,20 +176,41 @@ const Portfolio = () => {
       (targetYear - startYear) * 12 + (targetMonth - startMonth)
     );
     
-    // Calculate completed installments = months elapsed from start to now
-    let completedInstallments = 0;
-    const startIsInFuture = (startYear > nowYear) || (startYear === nowYear && startMonth > nowMonth);
-    
-    if (!startIsInFuture) {
-      const monthsElapsed = (nowYear - startYear) * 12 + (nowMonth - startMonth);
-      // Add 1 because the first month counts as installment 1
-      completedInstallments = Math.max(0, monthsElapsed + 1);
-    }
+    // Calculate completed installments from tracked payments/progress (not calendar months).
+    const paidSipMonths = new Set(
+      (goal.sipPayments || [])
+        .filter((p) => p.status === "paid")
+        .map((p) => p.month)
+    ).size;
+    const paidInstallmentContributions = (goal.contributions || []).filter(
+      (c) => c.status === "paid" && (c.type === "sip" || c.type === "installment")
+    ).length;
+    const trackedCompletedInstallments = goal.completedInstallments ?? 0;
+    let completedInstallments = Math.max(trackedCompletedInstallments, paidSipMonths, paidInstallmentContributions);
     
     // Cap at total installments
     completedInstallments = Math.min(completedInstallments, totalInstallments);
     
     return { total: totalInstallments, completed: completedInstallments };
+  };
+
+  const getOverallProgress = (goal: typeof goals[0]) => {
+    const contributed = (goal.contributions || [])
+      .filter((c) => c.status !== "pending")
+      .reduce((sum, c) => sum + c.amount, 0);
+    const inflatedValue = goal.inflatedValue || goal.goalAmount;
+    return inflatedValue ? Math.min((contributed / inflatedValue) * 100, 100) : 0;
+  };
+
+  const getProgressForDisplay = (goal: typeof goals[0]) => {
+    if (goal.isHybrid) {
+      return getHybridProgress(goal).progress;
+    }
+    if (goal.investmentType === "sip") {
+      const { total, completed } = getInstallmentInfo(goal);
+      return total > 0 ? Math.min((completed / total) * 100, 100) : 0;
+    }
+    return getOverallProgress(goal);
   };
 
   const getHybridProgress = (goal: typeof goals[0]) => {
@@ -220,7 +241,8 @@ const Portfolio = () => {
     const monthlySip = goal.isHybrid ? (goal.hybridSip || 0) : (goal.monthlySip || 0);
     
     if (completed) {
-      const newCompletedCount = alreadyCompleted + 1;
+      const existingTracked = goal.completedInstallments ?? 0;
+      const newCompletedCount = Math.min(total, Math.max(alreadyCompleted, existingTracked) + 1);
       const now = new Date();
       const currentMonthKey = monthKey(now);
       
@@ -244,7 +266,7 @@ const Portfolio = () => {
       });
       
       if (newCompletedCount < total) {
-        setCurrentInstallment(newCompletedCount + 1);
+        setCurrentInstallment(Math.min(total, newCompletedCount + 1));
       } else {
         setInstallmentMode(false);
         setHybridTrackingStep(null);
@@ -313,10 +335,19 @@ const Portfolio = () => {
       setInstallmentMode(true);
     } else {
       // Lumpsum already invested, go to SIP tracking
-      const { completed } = getInstallmentInfo(goal);
+      const { total, completed } = getInstallmentInfo(goal);
+      if (completed >= total) {
+        toast({
+          title: "All SIP installments completed",
+          description: `You have already completed ${total} of ${total} installments.`,
+        });
+        setHybridTrackingStep(null);
+        setInstallmentMode(false);
+        return;
+      }
       setHybridTrackingStep("sip");
       setInstallmentMode(true);
-      setCurrentInstallment(completed + 1);
+      setCurrentInstallment(Math.min(total, completed + 1));
     }
   };
 
@@ -324,8 +355,16 @@ const Portfolio = () => {
     if (!editGoalId) return;
     const goal = goals.find((g) => g.id === editGoalId);
     if (!goal) return;
-    const { completed } = getInstallmentInfo(goal);
-    setCurrentInstallment(completed + 1);
+    const { total, completed } = getInstallmentInfo(goal);
+    if (completed >= total) {
+      toast({
+        title: "All SIP installments completed",
+        description: `You have already completed ${total} of ${total} installments.`,
+      });
+      setInstallmentMode(false);
+      return;
+    }
+    setCurrentInstallment(Math.min(total, completed + 1));
     setInstallmentMode(true);
   };
 
@@ -449,11 +488,7 @@ const Portfolio = () => {
             {ongoingGoals.length === 0 ? (
               <p className="text-sm text-muted-foreground">No ongoing goals right now.</p>
             ) : ongoingGoals.map((goal) => {
-              const contributed = (goal.contributions || []).filter((c) => c.status !== "pending").reduce((sum, c) => sum + c.amount, 0);
-              // For hybrid goals, use the hybrid progress calculation
-              const progress = goal.isHybrid 
-                ? getHybridProgress(goal).progress 
-                : (goal.inflatedValue ? Math.min((contributed / goal.inflatedValue) * 100, 100) : 0);
+              const progress = getProgressForDisplay(goal);
               const getSipStatusLabel = () => {
                 if (goal.isHybrid) {
                   const hybridInfo = getHybridProgress(goal);
@@ -676,9 +711,11 @@ const Portfolio = () => {
             <div className="space-y-4">
               {editingGoal && (() => {
                 const { total, completed } = getInstallmentInfo(editingGoal);
+                const displayInstallment = Math.min(total, Math.max(1, currentInstallment));
                 const sipAmount = editingGoal.isHybrid ? (editingGoal.hybridSip || 0) : (editingGoal.monthlySip || 0);
-                const hybridInfo = editingGoal.isHybrid ? getHybridProgress(editingGoal) : null;
-                const progressPercent = hybridInfo ? hybridInfo.progress : (total > 0 ? Math.min((completed / total) * 100, 100) : 0);
+                const progressPercent = editingGoal.isHybrid
+                  ? getHybridProgress(editingGoal).progress
+                  : (total > 0 ? Math.min((completed / total) * 100, 100) : 0);
                 return (
                   <>
                     <div className="text-center space-y-2">
@@ -687,13 +724,13 @@ const Portfolio = () => {
                           <p className="text-xs text-success font-medium">✓ Lumpsum of ₹{(editingGoal.lumpsumAmount || 0).toLocaleString("en-IN")} invested</p>
                         </div>
                       )}
-                      <p className="text-lg font-semibold">SIP Installment {currentInstallment} of {total}</p>
+                      <p className="text-lg font-semibold">SIP Installment {displayInstallment} of {total}</p>
                       <p className="text-sm text-muted-foreground">Amount: ₹{sipAmount.toLocaleString("en-IN")}</p>
                       <Progress value={progressPercent} className="h-3 mt-4" />
                       <p className="text-xs text-muted-foreground">{completed} of {total} SIP installments completed ({Math.round(progressPercent)}%)</p>
                     </div>
                     <div className="text-center py-4">
-                      <p className="text-lg">Has installment #{currentInstallment} been paid?</p>
+                      <p className="text-lg">Has installment #{displayInstallment} been paid?</p>
                     </div>
                   </>
                 );

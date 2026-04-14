@@ -25,6 +25,8 @@ interface InflationDisplayData {
   rate: number;
   description: string;
   period: string;
+  best_estimate?: number;
+  total_inflation?: number;
   cagr?: number;
   geometric_mean?: number;
   regression_rate?: number;
@@ -55,6 +57,47 @@ const Dashboard = () => {
     car: { rate: 5.5, description: "Vehicle and consumer goods price inflation", period: "2010-2024" },
     education: { rate: 11.5, description: "Children education cost inflation", period: "2005-2025" }
   });
+
+  // Car brand-wise YoY inflation state (loaded lazily when clicking the car info button)
+  const [carBrandYoy, setCarBrandYoy] = useState<Record<string, Record<string, number>> | null>(null);
+  const [carDetailedData, setCarDetailedData] = useState<InflationDisplayData | null>(null);
+  const [carBrandLoading, setCarBrandLoading] = useState(false);
+  const [carBrandError, setCarBrandError] = useState<string | null>(null);
+
+  const fetchCarBrandYoy = async () => {
+    if (carBrandYoy && Object.keys(carBrandYoy).length > 0) return;
+
+    setCarBrandLoading(true);
+    setCarBrandError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/inflation-rates/car`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch car brand inflation");
+      }
+      const payload = await response.json();
+      const data = payload?.data ?? payload;
+      const brandYoy = data?.brand_yoy as Record<string, Record<string, number>> | undefined;
+      setCarBrandYoy(brandYoy || {});
+      setCarDetailedData({
+        rate: data?.best_estimate ?? inflationData.car.rate,
+        description: data?.description ?? inflationData.car.description,
+        period: data?.period ?? inflationData.car.period,
+        best_estimate: data?.best_estimate,
+        total_inflation: data?.total_inflation,
+        cagr: data?.cagr,
+        geometric_mean: data?.geometric_mean,
+        regression_rate: data?.regression_rate,
+        regression_r_squared: data?.regression_r_squared,
+        weighted_average: data?.weighted_average,
+        method_used: data?.method_used,
+        data_points_used: data?.data_points_used,
+      });
+    } catch (error) {
+      setCarBrandError("Could not load car brand-wise inflation from backend.");
+    } finally {
+      setCarBrandLoading(false);
+    }
+  };
 
   // Fetch inflation rates from backend on component mount
   useEffect(() => {
@@ -185,6 +228,7 @@ const Dashboard = () => {
                 },
               ].map((card) => {
                 const rateData = inflationData[card.dataKey];
+                const displayRateData = card.dataKey === "car" ? (carDetailedData ?? rateData) : rateData;
                 const matchingGoal = goals.find(g => g.goalType === card.goalKey);
                 const hasDetailedData = rateData?.cagr !== undefined || rateData?.city_wise || rateData?.categories;
                 
@@ -202,7 +246,17 @@ const Dashboard = () => {
                         {hasDetailedData && (
                           <Dialog>
                             <DialogTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (card.dataKey === "car") {
+                                    fetchCarBrandYoy();
+                                  }
+                                }}
+                              >
                                 <Info className="h-4 w-4 text-muted-foreground" />
                               </Button>
                             </DialogTrigger>
@@ -212,9 +266,24 @@ const Dashboard = () => {
                                   <span className="text-xl">{card.icon}</span>
                                   {card.label} - Detailed Analysis
                                 </DialogTitle>
-                                <DialogDescription>{rateData?.description}</DialogDescription>
+                                <DialogDescription>{displayRateData?.description}</DialogDescription>
                               </DialogHeader>
                               <div className="space-y-4">
+                                {card.dataKey === "car" && (
+                                  <div className="grid grid-cols-2 gap-2 text-sm">
+                                    <div className="p-2 bg-muted rounded-md">
+                                      <p className="text-xs text-muted-foreground">Overall Car Inflation</p>
+                                      <p className="font-semibold">{displayRateData?.rate?.toFixed(2)}%</p>
+                                    </div>
+                                    <div className="p-2 bg-muted rounded-md">
+                                      <p className="text-xs text-muted-foreground">Total Inflation ({displayRateData?.period})</p>
+                                      <p className="font-semibold">
+                                        {displayRateData?.total_inflation !== undefined ? `${displayRateData.total_inflation.toFixed(2)}%` : "N/A"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+
                                 {/* Calculation Methods */}
                                 <div className="space-y-2">
                                   <h4 className="font-semibold text-sm flex items-center gap-2">
@@ -222,33 +291,76 @@ const Dashboard = () => {
                                     Calculation Methods
                                   </h4>
                                   <div className="grid grid-cols-2 gap-2 text-sm">
-                                    {rateData?.cagr !== undefined && (
+                                    {displayRateData?.cagr !== undefined && (
                                       <div className="p-2 bg-muted rounded-md">
                                         <p className="text-xs text-muted-foreground">CAGR</p>
-                                        <p className="font-semibold">{rateData.cagr?.toFixed(2)}%</p>
+                                        <p className="font-semibold">{displayRateData.cagr?.toFixed(2)}%</p>
                                       </div>
                                     )}
-                                    {rateData?.geometric_mean !== undefined && (
+                                    {displayRateData?.geometric_mean !== undefined && (
                                       <div className="p-2 bg-muted rounded-md">
                                         <p className="text-xs text-muted-foreground">Geometric Mean</p>
-                                        <p className="font-semibold">{rateData.geometric_mean?.toFixed(2)}%</p>
+                                        <p className="font-semibold">{displayRateData.geometric_mean?.toFixed(2)}%</p>
                                       </div>
                                     )}
-                                    {rateData?.regression_rate !== undefined && (
+                                    {displayRateData?.regression_rate !== undefined && (
                                       <div className="p-2 bg-muted rounded-md">
                                         <p className="text-xs text-muted-foreground">Regression Rate</p>
-                                        <p className="font-semibold">{rateData.regression_rate?.toFixed(2)}%</p>
+                                        <p className="font-semibold">{displayRateData.regression_rate?.toFixed(2)}%</p>
                                       </div>
                                     )}
-                                    {rateData?.weighted_average !== undefined && (
+                                    {displayRateData?.weighted_average !== undefined && (
                                       <div className="p-2 bg-muted rounded-md">
                                         <p className="text-xs text-muted-foreground">Weighted Avg</p>
-                                        <p className="font-semibold">{rateData.weighted_average?.toFixed(2)}%</p>
+                                        <p className="font-semibold">{displayRateData.weighted_average?.toFixed(2)}%</p>
                                       </div>
                                     )}
                                   </div>
 
                                 </div>
+
+                                {/* Car brand-wise YoY inflation (from Excel) */}
+                                {card.dataKey === "car" && (
+                                  <div className="space-y-2">
+                                    <h4 className="font-semibold text-sm flex items-center gap-2">
+                                      <TrendingUp className="h-4 w-4" />
+                                      Car Brand Inflation (YoY)
+                                    </h4>
+                                    {carBrandLoading && (
+                                      <p className="text-xs text-muted-foreground">Loading brand-wise inflation...</p>
+                                    )}
+                                    {carBrandError && !carBrandLoading && (
+                                      <p className="text-xs text-destructive">{carBrandError}</p>
+                                    )}
+                                    {!carBrandLoading && !carBrandError && carBrandYoy && Object.keys(carBrandYoy).length > 0 && (
+                                      <div className="max-h-60 overflow-y-auto space-y-3 border rounded-md p-2">
+                                        {Object.entries(carBrandYoy).map(([brand, series]) => (
+                                          <div key={brand} className="space-y-1">
+                                            <div className="flex items-center justify-between">
+                                              <p className="text-xs font-semibold">{brand}</p>
+                                              <span className="text-[11px] font-semibold text-primary">
+                                                Avg: {(Math.abs(Object.values(series).reduce((sum, value) => sum + value, 0) / Math.max(Object.values(series).length, 1))).toFixed(2)}%
+                                              </span>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-1 text-[11px]">
+                                              {Object.entries(series)
+                                                .sort(([yearA], [yearB]) => Number(yearA) - Number(yearB))
+                                                .map(([year, yoy]) => (
+                                                  <div key={year} className="flex justify-between bg-muted rounded px-1 py-0.5">
+                                                    <span className="text-muted-foreground">{year}</span>
+                                                    <span className="font-semibold">{Math.abs(yoy as number).toFixed(1)}%</span>
+                                                  </div>
+                                                ))}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {!carBrandLoading && !carBrandError && (!carBrandYoy || Object.keys(carBrandYoy).length === 0) && (
+                                      <p className="text-xs text-muted-foreground">Brand-wise car inflation could not be derived from the dataset.</p>
+                                    )}
+                                  </div>
+                                )}
 
                                 {/* City-wise data for Real Estate */}
                                 {rateData?.city_wise && Object.keys(rateData.city_wise).length > 0 && (
@@ -390,8 +502,8 @@ const Dashboard = () => {
                                 )}
 
                                 <div className="text-xs text-muted-foreground pt-2 border-t">
-                                  {rateData?.method_used && <p>Primary Method: {rateData.method_used}</p>}
-                                  {rateData?.data_points_used && <p>Data Points: {rateData.data_points_used}</p>}
+                                  {displayRateData?.method_used && <p>Primary Method: {displayRateData.method_used}</p>}
+                                  {displayRateData?.data_points_used && <p>Data Points: {displayRateData.data_points_used}</p>}
                                 </div>
                               </div>
                             </DialogContent>

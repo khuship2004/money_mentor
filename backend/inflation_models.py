@@ -300,26 +300,113 @@ class InflationRatesProvider:
         return results
     
     def _calculate_car_inflation(self) -> Dict:
-        """Calculate car price inflation from Excel data using ALL methods"""
+        """Calculate car price inflation using BrandWise dataset.
+
+        Uses the Brand_Avg_Price sheet from Car_Dataset_BrandWise.xlsx to
+        compute both overall car inflation (all brands combined) and
+        brand-wise year-on-year inflation (Hyundai, Mercedes, etc.).
+        """
         try:
-            car_data = pd.read_excel(self.excel_path, sheet_name='Car Data')
-            
-            # Aggregate to yearly averages
-            yearly = car_data.groupby('year')['selling_price'].agg(['mean']).reset_index()
-            yearly.columns = ['Year', 'Avg_Price']
-            
-            # Use comprehensive calculation with ALL methods
-            results = self._calculate_all_methods(yearly, 'Avg_Price')
-            
-            # Add metadata
-            results['data_source'] = 'Excel Dataset (All Methods)'
-            results['description'] = 'Vehicle price inflation using multiple calculation methods'
-            results['method_used'] = 'best_estimate'
-            
+            # Use the same dataset as the standalone BrandWiseCarInflationAnalyzer
+            car_file = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)),
+                "Inflation Models",
+                "Car_Dataset_BrandWise.xlsx",
+            )
+
+            # Brand-wise average prices with years as columns (2015-2025).
+            # The workbook has title rows before the actual header row.
+            brand_data = pd.read_excel(
+                car_file,
+                sheet_name="Brand_Avg_Price",
+                header=2,
+            )
+
+            # Normalize column names to avoid hidden/extra whitespace issues.
+            brand_data.columns = [str(col).strip() for col in brand_data.columns]
+
+            # Clean brand data similar to BrandWiseCarInflationAnalyzer
+            if "Brand" not in brand_data.columns or "Tier" not in brand_data.columns:
+                raise ValueError("Required columns 'Brand' and 'Tier' not found in car brand dataset")
+
+            df = brand_data.dropna(subset=["Brand", "Tier"]).copy()
+
+            # Identify year columns (should be 2015-2025, numeric or string)
+            year_cols_raw = [
+                col
+                for col in df.columns
+                if isinstance(col, (int, float))
+                or (isinstance(col, str) and col.replace(".0", "").isdigit())
+            ]
+            year_cols_raw = sorted(
+                [col for col in year_cols_raw if 2015 <= float(col) <= 2025],
+                key=lambda c: float(c),
+            )
+
+            if not year_cols_raw:
+                raise ValueError("No yearly price columns found in car brand dataset")
+
+            # Map columns to string year labels for JSON keys
+            year_labels = [str(int(float(c))) for c in year_cols_raw]
+
+            # Overall average price across all brands each year
+            yearly_prices = df[year_cols_raw].mean()
+            yearly_df = pd.DataFrame(
+                {
+                    "Year": [int(float(c)) for c in year_cols_raw],
+                    "Avg_Price": yearly_prices.values,
+                }
+            )
+
+            # Use comprehensive calculation with ALL methods for overall car inflation
+            results = self._calculate_all_methods(yearly_df, "Avg_Price")
+
+            # --- Brand-wise year-on-year inflation ---
+            brand_yoy: Dict[str, Dict[str, float]] = {}
+            df["Brand"] = df["Brand"].astype(str).str.strip()
+            brand_df = df[df["Brand"] != ""].copy()
+
+            for brand in sorted(brand_df["Brand"].unique()):
+                rows = brand_df[brand_df["Brand"] == brand]
+                if rows.empty:
+                    continue
+
+                # Average price per year for this brand
+                brand_prices = rows[year_cols_raw].mean()
+
+                # Compute YoY inflation for each consecutive year pair
+                yoy_series: Dict[str, float] = {}
+                for i in range(1, len(year_cols_raw)):
+                    prev_col = year_cols_raw[i - 1]
+                    curr_col = year_cols_raw[i]
+
+                    prev_price = float(brand_prices.get(prev_col, np.nan))
+                    curr_price = float(brand_prices.get(curr_col, np.nan))
+
+                    if not (np.isfinite(prev_price) and np.isfinite(curr_price)) or prev_price <= 0:
+                        continue
+
+                    yoy = ((curr_price - prev_price) / prev_price) * 100.0
+                    year_label = year_labels[i]
+                    yoy_series[year_label] = round(float(yoy), 2)
+
+                if yoy_series:
+                    brand_yoy[brand] = yoy_series
+
+            # Attach metadata and brand-wise YoY breakdown for UI consumption
+            results["data_source"] = "Car Dataset BrandWise - Brand_Avg_Price (All Methods)"
+            results["description"] = (
+                "Brand-wise new vehicle price inflation using Brand_Avg_Price sheet "
+                "with multiple calculation methods"
+            )
+            results["method_used"] = "best_estimate"
+            if brand_yoy:
+                results["brand_yoy"] = brand_yoy
+
             return results
         except Exception as e:
             print(f"Error calculating car inflation: {e}")
-            return self._get_default_rates()['car']
+            return self._get_default_rates()["car"]
     
     def _calculate_education_inflation(self) -> Dict:
         """

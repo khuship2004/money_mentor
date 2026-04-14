@@ -191,99 +191,75 @@ class DetailedInvestmentAnalyzer:
         }
         
     def analyze_car_detailed(self):
-        """Detailed Car price inflation analysis"""
+        """Detailed Car price inflation analysis based on BrandWise dataset"""
         print("\n" + "█" * 80)
         print("█" + " " * 78 + "█")
         print("█" + "  2. CAR - DETAILED PRICE INFLATION ANALYSIS".ljust(78) + "█")
         print("█" + " " * 78 + "█")
         print("█" * 80)
         
-        # Load car data
-        car_data = pd.read_excel(self.excel_path, sheet_name='Car Data')
-        
-        # ===== BASIC STATISTICS =====
+        import os
+        import pandas as pd
+        import numpy as np
+        car_file = os.path.join(os.path.dirname(__file__), 'Car_Dataset_BrandWise.xlsx')
+        if not os.path.exists(car_file):
+            car_file = os.path.join(os.path.dirname(self.excel_path), 'Car_Dataset_BrandWise.xlsx')
+            
+        try:
+            car_data = pd.read_excel(car_file, sheet_name='All_Model_Prices', header=3)
+            years = [str(y) for y in range(2015, 2026)]
+        except Exception as e:
+            print(f"\n  Error loading car dataset: {e}")
+            return
+            
         print("\n" + "=" * 70)
         print("  A. DATA OVERVIEW")
         print("=" * 70)
-        print(f"\n  Data Source:      Excel Dataset (Car Data sheet)")
-        print(f"  Total Records:    {len(car_data):,}")
-        print(f"  Year Range:       {car_data['year'].min()} - {car_data['year'].max()}")
-        print(f"  Columns:          {list(car_data.columns)}")
+        print(f"\n  Data Source:      Car_Dataset_BrandWise.xlsx (All_Model_Prices)")
+        print(f"  Total Models:     {len(car_data):,}")
+        print(f"  Total Brands:     {car_data['Brand'].nunique()}")
+        print(f"  Year Range:       2015 - 2025")
         
-        # ===== DESCRIPTIVE STATISTICS =====
         print("\n" + "=" * 70)
-        print("  B. DESCRIPTIVE STATISTICS")
+        print("  B. BRAND-WISE ANALYSIS")
         print("=" * 70)
         
-        print(f"\n  Price Statistics (Rs.):")
-        print(f"  ┌{'─'*30}┬{'─'*20}┐")
-        print(f"  │ {'Statistic':<28} │ {'Value':>18} │")
-        print(f"  ├{'─'*30}┼{'─'*20}┤")
-        print(f"  │ {'Minimum Price':<28} │ Rs. {car_data['selling_price'].min():>13,.0f} │")
-        print(f"  │ {'Maximum Price':<28} │ Rs. {car_data['selling_price'].max():>13,.0f} │")
-        print(f"  │ {'Mean Price':<28} │ Rs. {car_data['selling_price'].mean():>13,.0f} │")
-        print(f"  │ {'Median Price':<28} │ Rs. {car_data['selling_price'].median():>13,.0f} │")
-        print(f"  │ {'Standard Deviation':<28} │ Rs. {car_data['selling_price'].std():>13,.0f} │")
-        print(f"  │ {'Skewness':<28} │ {car_data['selling_price'].skew():>18.4f} │")
-        print(f"  │ {'Kurtosis':<28} │ {car_data['selling_price'].kurtosis():>18.4f} │")
-        print(f"  └{'─'*30}┴{'─'*20}┘")
+        bvars = car_data.groupby('Brand')[years[-1]].agg(['mean', 'count']).sort_values('mean', ascending=False).dropna()
+        for brand, row in bvars.iterrows():
+            bar = "█" * min(int(row['mean'] / 5), 30)
+            print(f"    {brand:<18} ₹ {row['mean']:>6.2f} L ({int(row['count']):>3} models) {bar}")
         
-        # ===== CATEGORY ANALYSIS =====
         print("\n" + "=" * 70)
         print("  C. CATEGORY-WISE ANALYSIS")
         print("=" * 70)
         
-        # By Fuel Type
-        print(f"\n  By Fuel Type:")
-        fuel_stats = car_data.groupby('fuel')['selling_price'].agg(['mean', 'count']).sort_values('mean', ascending=False)
-        for fuel, row in fuel_stats.iterrows():
-            bar = "█" * int(row['mean'] / 50000)
-            print(f"    {fuel:<12} Rs. {row['mean']:>10,.0f} ({int(row['count']):>4} cars) {bar}")
-        
-        # By Transmission
-        print(f"\n  By Transmission:")
-        trans_stats = car_data.groupby('transmission')['selling_price'].agg(['mean', 'count']).sort_values('mean', ascending=False)
-        for trans, row in trans_stats.iterrows():
-            bar = "█" * int(row['mean'] / 50000)
-            print(f"    {trans:<12} Rs. {row['mean']:>10,.0f} ({int(row['count']):>4} cars) {bar}")
-        
-        # By Seller Type
-        print(f"\n  By Seller Type:")
-        seller_stats = car_data.groupby('seller_type')['selling_price'].agg(['mean', 'count']).sort_values('mean', ascending=False)
-        for seller, row in seller_stats.iterrows():
-            bar = "█" * int(row['mean'] / 50000)
-            print(f"    {seller:<15} Rs. {row['mean']:>10,.0f} ({int(row['count']):>4} cars) {bar}")
-        
-        # By Owner
-        print(f"\n  By Owner Type:")
-        owner_stats = car_data.groupby('owner')['selling_price'].agg(['mean', 'count']).sort_values('mean', ascending=False)
-        for owner, row in owner_stats.iterrows():
-            bar = "█" * int(row['mean'] / 50000)
-            print(f"    {owner:<18} Rs. {row['mean']:>10,.0f} ({int(row['count']):>4} cars) {bar}")
-        
-        # ===== YEARLY ANALYSIS =====
+        svars = car_data.groupby('Segment')[years[-1]].agg(['mean', 'count']).sort_values('mean', ascending=False).dropna()
+        for segment, row in svars.iterrows():
+            bar = "█" * min(int(row['mean'] / 5), 30)
+            print(f"    {segment:<18} ₹ {row['mean']:>6.2f} L ({int(row['count']):>3} models) {bar}")
+            
         print("\n" + "=" * 70)
-        print("  D. YEAR-BY-YEAR ANALYSIS (Manufacturing Year)")
+        print("  D. YEAR-BY-YEAR ANALYSIS")
         print("=" * 70)
         
-        yearly = car_data.groupby('year').agg({
-            'selling_price': ['mean', 'min', 'max', 'std', 'count', 'median']
-        }).reset_index()
-        yearly.columns = ['Year', 'Avg_Price', 'Min_Price', 'Max_Price', 'Std_Dev', 'Count', 'Median']
+        yearly_avg = car_data[years].mean()
+        yearly = pd.DataFrame({
+            'Year': [int(y) for y in years],
+            'Avg_Price': yearly_avg.values * 100000
+        })
         yearly['YoY_Change'] = yearly['Avg_Price'].pct_change() * 100
         
-        print(f"\n  {'Year':<6} {'Avg Price':>12} {'Median':>12} {'Min':>10} {'Max':>12} {'Count':>6} {'YoY':>10}")
-        print("  " + "-" * 75)
+        print(f"\n  {'Year':<6} {'Avg Base Price':>15} {'YoY Change':>15}")
+        print("  " + "-" * 45)
         
         for _, row in yearly.iterrows():
             yoy = f"{row['YoY_Change']:+.2f}%" if pd.notna(row['YoY_Change']) else "N/A"
-            print(f"  {int(row['Year']):<6} {row['Avg_Price']:>12,.0f} {row['Median']:>12,.0f} {row['Min_Price']:>10,.0f} {row['Max_Price']:>12,.0f} {int(row['Count']):>6} {yoy:>10}")
+            print(f"  {int(row['Year']):<6} Rs. {row['Avg_Price']:>10,.0f} {yoy:>15}")
+            
+        print("  " + "-" * 45)
         
-        print("  " + "-" * 75)
-        
-        # ===== INFLATION CALCULATIONS =====
         print("\n" + "=" * 70)
-        print("  E. INFLATION CALCULATIONS (MULTIPLE METHODS)")
+        print("  E. INFLATION CALCULATIONS")
         print("=" * 70)
         
         first_year = yearly['Year'].iloc[0]
@@ -303,61 +279,24 @@ class DetailedInvestmentAnalyzer:
         trend_inflation = (slope / yearly['Avg_Price'].mean()) * 100
         
         print(f"\n  Period: {first_year} - {last_year} ({total_years} years)")
-        print(f"\n  Starting Price (Avg {first_year}):  Rs. {first_price:>12,.2f}")
-        print(f"  Ending Price (Avg {last_year}):    Rs. {last_price:>12,.2f}")
-        print(f"  Absolute Change:                  Rs. {last_price - first_price:>12,.2f}")
+        print(f"\n  Starting Avg Price ({first_year}):  Rs. {first_price:>12,.2f}")
+        print(f"  Ending Avg Price ({last_year}):    Rs. {last_price:>12,.2f}")
         
         print(f"\n  ┌{'─'*45}┬{'─'*18}┐")
         print(f"  │ {'Method':<43} │ {'Result':>16} │")
         print(f"  ├{'─'*45}┼{'─'*18}┤")
-        print(f"  │ {'1. Total Inflation (End-Start)/Start':<43} │ {total_inflation:>15.2f}% │")
-        print(f"  │ {'2. CAGR (Compound Annual Growth Rate)':<43} │ {cagr:>15.2f}% │")
-        print(f"  │ {'3. Average Year-over-Year Change':<43} │ {avg_yoy:>15.2f}% │")
-        print(f"  │ {'4. Geometric Mean of Growth Rates':<43} │ {geometric_mean:>15.2f}% │")
-        print(f"  │ {'5. Linear Trend-based Inflation':<43} │ {trend_inflation:>15.2f}% │")
+        print(f"  │ {'1. Total Inflation':<43} │ {total_inflation:>15.2f}% │")
+        print(f"  │ {'2. CAGR':<43} │ {cagr:>15.2f}% │")
+        print(f"  │ {'3. Average YoY':<43} │ {avg_yoy:>15.2f}% │")
+        print(f"  │ {'4. Geometric Mean':<43} │ {geometric_mean:>15.2f}% │")
+        print(f"  │ {'5. Linear Trend':<43} │ {trend_inflation:>15.2f}% │")
         print(f"  └{'─'*45}┴{'─'*18}┘")
         
-        # ===== BEST & WORST YEARS =====
-        print("\n" + "=" * 70)
-        print("  F. BEST & WORST PERFORMING YEARS")
-        print("=" * 70)
-        
-        valid_years = yearly[yearly['YoY_Change'].notna()].copy()
+        valid_years = yearly[yearly['YoY_Change'].notna()]
         best_year = valid_years.loc[valid_years['YoY_Change'].idxmax()]
         worst_year = valid_years.loc[valid_years['YoY_Change'].idxmin()]
         
-        print(f"\n  🏆 Best Year:  {int(best_year['Year'])} with {best_year['YoY_Change']:+.2f}% growth")
-        print(f"     Avg Price: Rs. {best_year['Avg_Price']:,.0f} ({int(best_year['Count'])} cars)")
-        
-        print(f"\n  📉 Worst Year: {int(worst_year['Year'])} with {worst_year['YoY_Change']:+.2f}% change")
-        print(f"     Avg Price: Rs. {worst_year['Avg_Price']:,.0f} ({int(worst_year['Count'])} cars)")
-        
-        # Most expensive year
-        most_expensive = yearly.loc[yearly['Avg_Price'].idxmax()]
-        print(f"\n  💰 Most Expensive Year: {int(most_expensive['Year'])}")
-        print(f"     Avg Price: Rs. {most_expensive['Avg_Price']:,.0f}")
-        
-        # ===== DEPRECIATION INSIGHT =====
-        print("\n" + "=" * 70)
-        print("  G. CAR DEPRECIATION INSIGHT")
-        print("=" * 70)
-        
-        # Calculate avg km driven by year
-        car_data['car_age'] = 2020 - car_data['year']  # Assuming data from 2020
-        avg_km = car_data.groupby('year')['km_driven'].mean()
-        
-        print(f"\n  Note: Car prices in resale market show 'new car price inflation'")
-        print(f"  Newer manufacturing years have higher prices due to:")
-        print(f"    • Less depreciation")
-        print(f"    • Better features")
-        print(f"    • Higher original purchase price")
-        
-        print(f"\n  Average KM Driven by Manufacturing Year (Sample):")
-        for year in [2010, 2015, 2018, 2020]:
-            if year in avg_km.index:
-                print(f"    {year}: {avg_km[year]:>10,.0f} km")
-        
-        print(f"\n  >>> CAR PRICE INFLATION RATE: {cagr:.2f}% (CAGR)")
+        print(f"\n  >>> CAR ANNUAL INFLATION RATE: {cagr:.2f}% (CAGR)\n")
         
         self.results['Car'] = {
             'period': f"{first_year}-{last_year}",
@@ -375,7 +314,7 @@ class DetailedInvestmentAnalyzer:
             'worst_year_return': worst_year['YoY_Change'],
             'total_records': len(car_data)
         }
-        
+
     def analyze_real_estate_detailed(self):
         """Detailed Real Estate inflation analysis"""
         print("\n" + "█" * 80)
