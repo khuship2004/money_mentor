@@ -87,17 +87,33 @@ const formatYears = (years?: number) => {
     custom: 0.06, // Default 6%
   });
   const [inflationRatesDisplay, setInflationRatesDisplay] = useState<Record<string, { rate: number; description: string; period: string }>>({});
+  const [detailedInflationData, setDetailedInflationData] = useState<Record<string, any>>({});
+  const [carBrand, setCarBrand] = useState("");
+  const [realEstateCity, setRealEstateCity] = useState("");
+  const [educationType, setEducationType] = useState("");
+  const [educationCountry, setEducationCountry] = useState("");
 
   // Fetch inflation rates from backend on component mount
   useEffect(() => {
     const fetchInflationRates = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/inflation-rates-simple`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.status === "success") {
-            setInflationRates(data.rates);
-            setInflationRatesDisplay(data.display);
+        const [simpleResponse, detailedResponse] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/inflation-rates-simple`),
+          fetch(`${API_BASE_URL}/api/inflation-rates`)
+        ]);
+
+        if (simpleResponse.ok) {
+          const simpleData = await simpleResponse.json();
+          if (simpleData.status === "success") {
+            setInflationRates(simpleData.rates);
+            setInflationRatesDisplay(simpleData.display);
+          }
+        }
+
+        if (detailedResponse.ok) {
+          const detailedData = await detailedResponse.json();
+          if (detailedData.status === "success" && detailedData.data) {
+            setDetailedInflationData(detailedData.data);
           }
         }
       } catch {
@@ -106,6 +122,114 @@ const formatYears = (years?: number) => {
     };
     fetchInflationRates();
   }, []);
+
+  useEffect(() => {
+    // Reset dependent selections when goal changes
+    setCarBrand("");
+    setRealEstateCity("");
+    setEducationType("");
+    setEducationCountry("");
+  }, [goalType]);
+
+  useEffect(() => {
+    if (educationType !== "higher_studies") {
+      setEducationCountry("");
+    }
+  }, [educationType]);
+
+  const carBrandOptions = useMemo(() => {
+    const brandYoy = detailedInflationData?.car?.brand_yoy as Record<string, Record<string, number>> | undefined;
+    return brandYoy ? Object.keys(brandYoy).sort((a, b) => a.localeCompare(b)) : [];
+  }, [detailedInflationData]);
+
+  const realEstateCityOptions = useMemo(() => {
+    const cityWise = detailedInflationData?.real_estate?.city_wise as Record<string, number> | undefined;
+    return cityWise ? Object.keys(cityWise).sort((a, b) => a.localeCompare(b)) : [];
+  }, [detailedInflationData]);
+
+  const higherStudyCountryOptions = useMemo(() => {
+    const international = detailedInflationData?.education?.categories?.international as Record<string, any> | undefined;
+    if (!international) return [];
+    return Object.keys(international)
+      .filter((key) => !["average", "note", "period", "program_durations"].includes(key))
+      .sort((a, b) => a.localeCompare(b));
+  }, [detailedInflationData]);
+
+  const toSafeRate = (value: unknown, fallback: number) => {
+    if (typeof value !== "number" || Number.isNaN(value)) return fallback;
+    return Math.max(0, value / 100);
+  };
+
+  const getSelectedInflationRate = () => {
+    if (goalType === "car") {
+      const brandYoy = detailedInflationData?.car?.brand_yoy?.[carBrand] as Record<string, number> | undefined;
+      if (brandYoy && Object.keys(brandYoy).length > 0) {
+        const yearlyRates = Object.values(brandYoy);
+        const avgRate = yearlyRates.reduce((sum, value) => sum + Math.abs(value), 0) / yearlyRates.length;
+        return toSafeRate(avgRate, inflationRates.car || 0.055);
+      }
+      return inflationRates.car || 0.055;
+    }
+
+    if (goalType === "house") {
+      const cityRate = detailedInflationData?.real_estate?.city_wise?.[realEstateCity];
+      return toSafeRate(cityRate, inflationRates.house || 0.0726);
+    }
+
+    if (goalType === "education") {
+      const categories = detailedInflationData?.education?.categories;
+      if (educationType === "school") {
+        return toSafeRate(categories?.school?.average, inflationRates.education || 0.115);
+      }
+      if (educationType === "higher_education") {
+        return toSafeRate(categories?.higher_education?.average, inflationRates.education || 0.115);
+      }
+      if (educationType === "coaching") {
+        return toSafeRate(categories?.coaching?.average, inflationRates.education || 0.115);
+      }
+      if (educationType === "higher_studies") {
+        return toSafeRate(categories?.international?.[educationCountry]?.average, inflationRates.education || 0.115);
+      }
+      return inflationRates.education || 0.115;
+    }
+
+    return inflationRates[goalType] || 0.06;
+  };
+
+  const getGoalDisplayName = () => {
+    if (goalType === "custom") return customGoalName.trim();
+    if (goalType === "car" && carBrand) return `Car (${carBrand})`;
+    if (goalType === "house" && realEstateCity) return `House (${realEstateCity})`;
+    if (goalType === "education") {
+      if (educationType === "higher_studies" && educationCountry) {
+        return `Education (Higher Studies - ${educationCountry.toUpperCase()})`;
+      }
+      if (educationType) {
+        const labelMap: Record<string, string> = {
+          school: "School",
+          higher_education: "Higher Education",
+          coaching: "Coaching",
+          higher_studies: "Higher Studies",
+        };
+        return `Education (${labelMap[educationType] || educationType})`;
+      }
+    }
+    return goalType;
+  };
+
+  const isSelectionComplete = () => {
+    if (goalType === "car") return carBrandOptions.length === 0 || Boolean(carBrand);
+    if (goalType === "house") return realEstateCityOptions.length === 0 || Boolean(realEstateCity);
+    if (goalType === "education") {
+      if (!educationType) return false;
+      if (educationType === "higher_studies") {
+        return higherStudyCountryOptions.length === 0 || Boolean(educationCountry);
+      }
+      return true;
+    }
+    if (goalType === "custom") return Boolean(customGoalName.trim());
+    return true;
+  };
 
   const getMonthsToTarget = () => {
     if (!targetYear) return 0;
@@ -120,7 +244,7 @@ const formatYears = (years?: number) => {
     const currentAmount = parseFloat(goalAmount);
     const months = getMonthsToTarget();
     const years = months / 12;
-    const inflationRate = inflationRates[goalType] || 0.06;
+    const inflationRate = getSelectedInflationRate();
     const futureValue = currentAmount * Math.pow(1 + inflationRate, years);
     
     return { futureValue, inflationRate, years, months };
@@ -136,10 +260,10 @@ const formatYears = (years?: number) => {
       return;
     }
 
-    if (goalType === "custom" && !customGoalName.trim()) {
+    if (!isSelectionComplete()) {
       toast({
-        title: "Missing Goal Name",
-        description: "Please name your custom goal",
+        title: "Missing Selection",
+        description: "Please complete the goal-specific inputs before calculating.",
         variant: "destructive"
       });
       return;
@@ -206,7 +330,7 @@ const formatYears = (years?: number) => {
       const newGoalId = `goal-${Date.now()}`;
       const calculatedMonthlySip = data.monthly_sip || (months ? futureValue / months : 0);
       const calculatedLumpsum = data.lumpsum_amount || futureValue;
-      const goalName = goalType === "custom" ? customGoalName.trim() : goalType;
+      const goalName = getGoalDisplayName();
 
       // Use data.portfolio which is what the backend returns
       const allocation = data.portfolio || data.asset_allocation || {};
@@ -315,7 +439,7 @@ const formatYears = (years?: number) => {
       const newGoalId = `goal-${Date.now()}`;
       const calculatedMonthlySip = fallbackData.monthly_sip || (months ? futureValue / months : 0);
       const calculatedLumpsum = fallbackData.lumpsum_amount || futureValue;
-      const goalName = goalType === "custom" ? customGoalName.trim() : goalType;
+      const goalName = getGoalDisplayName();
 
       const baseGoal = {
         id: newGoalId,
@@ -473,6 +597,82 @@ const formatYears = (years?: number) => {
                 )}
               </div>
 
+              {goalType === "car" && (
+                <div className="space-y-2">
+                  <Label>Car Brand *</Label>
+                  <Select value={carBrand} onValueChange={setCarBrand}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select car brand" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {carBrandOptions.map((brand) => (
+                        <SelectItem key={brand} value={brand}>{brand}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {carBrandOptions.length === 0 && (
+                    <p className="text-xs text-muted-foreground">Brand-wise data unavailable, using overall car inflation.</p>
+                  )}
+                </div>
+              )}
+
+              {goalType === "house" && (
+                <div className="space-y-2">
+                  <Label>City *</Label>
+                  <Select value={realEstateCity} onValueChange={setRealEstateCity}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select city" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {realEstateCityOptions.map((city) => (
+                        <SelectItem key={city} value={city}>{city}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {realEstateCityOptions.length === 0 && (
+                    <p className="text-xs text-muted-foreground">City-wise data unavailable, using overall real estate inflation.</p>
+                  )}
+                </div>
+              )}
+
+              {goalType === "education" && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Education Category *</Label>
+                    <Select value={educationType} onValueChange={setEducationType}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select education category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="school">School</SelectItem>
+                        <SelectItem value="higher_education">Higher Education</SelectItem>
+                        <SelectItem value="coaching">Coaching</SelectItem>
+                        <SelectItem value="higher_studies">Higher Studies</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {educationType === "higher_studies" && (
+                    <div className="space-y-2">
+                      <Label>Country *</Label>
+                      <Select value={educationCountry} onValueChange={setEducationCountry}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select country" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {higherStudyCountryOptions.map((country) => (
+                            <SelectItem key={country} value={country}>{country.toUpperCase()}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {higherStudyCountryOptions.length === 0 && (
+                        <p className="text-xs text-muted-foreground">Country-wise data unavailable, using overall education inflation.</p>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
               {goalType === "custom" && (
                 <div className="space-y-2">
                   <Label htmlFor="custom-goal">Name your goal</Label>
@@ -615,7 +815,7 @@ const formatYears = (years?: number) => {
                 onClick={handleCalculate} 
                 className="w-full" 
                 size="lg"
-                disabled={!goalAmount || !targetYear || !targetMonth || !goalType || !riskAppetite || (goalType === "custom" && !customGoalName.trim()) || isCalculating}
+                disabled={!goalAmount || !targetYear || !targetMonth || !goalType || !riskAppetite || !isSelectionComplete() || isCalculating}
               >
                 {isCalculating ? (
                   <>

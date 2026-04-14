@@ -411,178 +411,173 @@ class InflationRatesProvider:
     def _calculate_education_inflation(self) -> Dict:
         """
         Calculate education inflation for children's education planning.
-        Uses realistic data and CAGR for each category.
-        
-        Focus: What parents typically spend on children's education
-        - School fees (primary expense for most families)
-        - College/University (UG programs)
-        - Coaching/Tuition
+        Uses Inflation Models/India_Education_Inflation_Dataset_2005_2025_Combined.xlsx.
         """
-        # School Education Data (Annual Fees - what parents pay yearly)
-        school_data = {
-            'Year': [2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014,
-                     2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025],
-            'Budget_School': [15000, 16500, 18000, 20000, 22000, 25000, 28000, 32000, 36000, 40000,
-                              45000, 50000, 55000, 62000, 70000, 72000, 75000, 82000, 92000, 105000, 120000],
-            'Mid_Range_School': [35000, 40000, 45000, 52000, 60000, 70000, 82000, 95000, 110000, 125000,
-                                  145000, 165000, 185000, 210000, 240000, 250000, 265000, 295000, 330000, 375000, 425000],
-            'Premium_School': [80000, 95000, 115000, 140000, 170000, 200000, 240000, 290000, 350000, 420000,
-                               500000, 600000, 720000, 850000, 1000000, 1050000, 1150000, 1300000, 1500000, 1750000, 2000000]
-        }
-        
-        df = pd.DataFrame(school_data)
-        years = len(df) - 1  # 20 years
-        
-        # Calculate CAGR for school categories (most reliable for long-term data)
-        budget_cagr = self._calculate_cagr(df['Budget_School'].iloc[0], df['Budget_School'].iloc[-1], years)
-        mid_cagr = self._calculate_cagr(df['Mid_Range_School'].iloc[0], df['Mid_Range_School'].iloc[-1], years)
-        premium_cagr = self._calculate_cagr(df['Premium_School'].iloc[0], df['Premium_School'].iloc[-1], years)
-        
-        # Also calculate geometric mean for school data (uses all years)
-        df_budget = df[['Year', 'Budget_School']].copy()
-        df_budget.columns = ['Year', 'Avg_Price']
-        budget_geo = self._calculate_geometric_mean(df_budget['Avg_Price'])
-        
-        df_mid = df[['Year', 'Mid_Range_School']].copy()
-        df_mid.columns = ['Year', 'Avg_Price']
-        mid_geo = self._calculate_geometric_mean(df_mid['Avg_Price'])
-        
-        df_premium = df[['Year', 'Premium_School']].copy()
-        df_premium.columns = ['Year', 'Avg_Price']
-        premium_geo = self._calculate_geometric_mean(df_premium['Avg_Price'])
-        
-        # Average of CAGR and Geometric Mean for each school type
-        budget_rate = (budget_cagr + budget_geo) / 2
-        mid_rate = (mid_cagr + mid_geo) / 2
-        premium_rate = (premium_cagr + premium_geo) / 2
-        
-        # School average - weighted by what most families choose
-        # 50% mid-range, 35% budget, 15% premium
-        school_avg = budget_rate * 0.35 + mid_rate * 0.50 + premium_rate * 0.15
-        
-        # Higher Education - Using industry-standard estimates
-        # Based on AISHE reports and fee trends
-        higher_ed_rates = {
-            'govt_college': 8.0,       # Government colleges increase slower
-            'private_college': 12.0,    # Private colleges
-            'engineering': 10.5,        # Engineering (avg of govt & private)
-            'medical': 15.0,            # Medical education (high but realistic)
-            'mba': 11.5                 # MBA programs
-        }
-        # Weighted average - most students go to regular colleges, not medical/mba
-        higher_ed_avg = (
-            higher_ed_rates['govt_college'] * 0.25 +
-            higher_ed_rates['private_college'] * 0.30 +
-            higher_ed_rates['engineering'] * 0.25 +
-            higher_ed_rates['medical'] * 0.10 +
-            higher_ed_rates['mba'] * 0.10
-        )
-        
-        # Coaching/Tuition Data
-        coaching_rates = {
-            'school_tuition': 10.0,     # Regular home tuition
-            'iit_jee': 15.0,            # IIT-JEE coaching (premium)
-            'neet': 14.0,               # NEET coaching
-            'upsc': 12.0                # UPSC coaching
-        }
-        # Most students do regular tuition, fewer do competitive exam coaching
-        coaching_avg = (
-            coaching_rates['school_tuition'] * 0.60 +
-            coaching_rates['iit_jee'] * 0.15 +
-            coaching_rates['neet'] * 0.15 +
-            coaching_rates['upsc'] * 0.10
-        )
-        
-        # International Higher Education (for Indian students going abroad)
-        # Rates include both tuition increase AND INR depreciation effect
-        # Data period: 2010-2025 (15 years)
-        international_rates = {
-            'usa': {
-                'public_university': 9.82,      # State universities
-                'private_ivy_league': 9.50,     # Top private universities
-                'community_college': 10.24,     # 2-year programs
-                'average': 9.66
-            },
-            'uk': {
-                'russell_group': 9.75,          # Oxford, Cambridge, Imperial
-                'standard_university': 9.59,
-                'average': 9.67
-            },
-            'germany': {
-                'public_free_tuition': 7.11,    # Only living costs (tuition is free)
-                'private_university': 9.35,
-                'average': 8.23
-            },
-            'canada': {
-                'top_universities': 9.30,       # U of T, McGill, UBC
-                'standard': 9.88,
-                'average': 9.59
-            },
-            'australia': {
-                'group_of_eight': 7.97,         # Melbourne, Sydney, etc.
-                'standard': 8.34,
-                'average': 8.16
+        try:
+            education_file = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)),
+                "Inflation Models",
+                "India_Education_Inflation_Dataset_2005_2025_Combined.xlsx",
+            )
+
+            summary_df = pd.read_excel(education_file, sheet_name="Summary_Stats", header=1)
+            annual_df = pd.read_excel(education_file, sheet_name="Annual_YoY_Rates", header=1)
+
+            summary_df.columns = [str(col).strip() for col in summary_df.columns]
+            annual_df.columns = [str(col).strip() for col in annual_df.columns]
+
+            summary_df = summary_df.rename(
+                columns={
+                    summary_df.columns[0]: "category",
+                    summary_df.columns[1]: "key",
+                    summary_df.columns[2]: "avg_yoy",
+                    summary_df.columns[3]: "cagr",
+                    summary_df.columns[4]: "total_inflation",
+                }
+            )
+
+            summary_df = summary_df[summary_df["key"].notna()].copy()
+            summary_df["key"] = summary_df["key"].astype(str).str.strip()
+            summary_df["cagr"] = pd.to_numeric(summary_df["cagr"], errors="coerce")
+            summary_df["avg_yoy"] = pd.to_numeric(summary_df["avg_yoy"], errors="coerce")
+
+            metric_map = {
+                row["key"]: {
+                    "cagr": float(row["cagr"]),
+                    "avg_yoy": float(row["avg_yoy"]) if pd.notna(row["avg_yoy"]) else float(row["cagr"]),
+                }
+                for _, row in summary_df.iterrows()
+                if pd.notna(row["cagr"])
             }
-        }
-        international_avg = (
-            international_rates['usa']['average'] * 0.35 +      # USA most popular
-            international_rates['uk']['average'] * 0.20 +       # UK second choice
-            international_rates['germany']['average'] * 0.15 +  # Germany growing
-            international_rates['canada']['average'] * 0.20 +   # Canada popular
-            international_rates['australia']['average'] * 0.10  # Australia
-        )
-        
-        # Program costs in 2025 (in Rs. Lakhs per year)
-        program_costs_2025 = {
-            'usa_public': 41.0,
-            'usa_private': 80.3,
-            'uk_russell': 51.6,
-            'uk_standard': 39.2,
-            'germany_public': 15.3,
-            'canada_top': 47.1,
-            'australia_go8': 42.6,
-            'india_iit': 12.0,
-            'india_iim': 55.0
-        }
-        
-        # Overall Education Inflation - weighted by spending pattern
-        # Parents spend most on school (12+ years), then college (3-5 years), then coaching
-        overall_rate = (
-            school_avg * 0.50 +        # School is longest duration
-            higher_ed_avg * 0.30 +     # College/University
-            coaching_avg * 0.20        # Coaching/Tuition
-        )
-        
-        return {
-            'cagr': round(overall_rate, 2),
-            'best_estimate': round(overall_rate, 2),
-            'total_inflation': round(((1 + overall_rate/100) ** 20 - 1) * 100, 2),
-            'avg_yoy': round(overall_rate, 2),
-            'period': '2005-2025',
-            'years': 20,
-            'data_source': 'Education Surveys (AISHE, NSSO, Industry Reports)',
-            'description': 'Children education cost inflation (school + college + coaching)',
-            'method_used': 'weighted_average',
-            'data_points_used': len(df),
-            'categories': {
-                'school': {
-                    'budget': round(budget_rate, 2),
-                    'mid_range': round(mid_rate, 2),
-                    'premium': round(premium_rate, 2),
-                    'average': round(school_avg, 2),
-                    'note': 'Annual school fees (tuition, books, uniform)'
+
+            required_keys = [
+                "School_Budget",
+                "School_Mid_Range",
+                "School_Premium",
+                "HE_Govt_College",
+                "HE_Private_College",
+                "HE_Engineering",
+                "HE_Medical",
+                "HE_MBA",
+                "Coaching_School_Tuition",
+                "Coaching_IIT_JEE",
+                "Coaching_NEET",
+                "Coaching_UPSC",
+            ]
+            missing = [k for k in required_keys if k not in metric_map]
+            if missing:
+                raise ValueError(f"Missing required education metrics in Summary_Stats: {missing}")
+
+            school_rates = {
+                "budget": metric_map["School_Budget"]["cagr"],
+                "mid_range": metric_map["School_Mid_Range"]["cagr"],
+                "premium": metric_map["School_Premium"]["cagr"],
+            }
+            school_avg = float(np.mean(list(school_rates.values())))
+
+            higher_ed_rates = {
+                "govt_college": metric_map["HE_Govt_College"]["cagr"],
+                "private_college": metric_map["HE_Private_College"]["cagr"],
+                "engineering": metric_map["HE_Engineering"]["cagr"],
+                "medical": metric_map["HE_Medical"]["cagr"],
+                "mba": metric_map["HE_MBA"]["cagr"],
+            }
+            higher_ed_avg = float(np.mean(list(higher_ed_rates.values())))
+
+            coaching_rates = {
+                "school_tuition": metric_map["Coaching_School_Tuition"]["cagr"],
+                "iit_jee": metric_map["Coaching_IIT_JEE"]["cagr"],
+                "neet": metric_map["Coaching_NEET"]["cagr"],
+                "upsc": metric_map["Coaching_UPSC"]["cagr"],
+            }
+            coaching_avg = float(np.mean(list(coaching_rates.values())))
+
+            # Keep same household spending weights for overall estimate.
+            overall_rate = school_avg * 0.50 + higher_ed_avg * 0.30 + coaching_avg * 0.20
+
+            year_col = annual_df.columns[0]
+            annual_df = annual_df[pd.to_numeric(annual_df[year_col], errors="coerce").notna()].copy()
+            annual_df["Year"] = pd.to_numeric(annual_df[year_col], errors="coerce").astype(int)
+            first_year = int(annual_df["Year"].min())
+            last_year = int(annual_df["Year"].max())
+            total_years = max(last_year - first_year, 1)
+
+            # International Higher Education (for Indian students going abroad)
+            # This workbook is India-focused, so keep existing international assumptions.
+            international_rates = {
+                "usa": {
+                    "public_university": 9.82,
+                    "private_ivy_league": 9.50,
+                    "community_college": 10.24,
+                    "average": 9.66,
                 },
-                'higher_education': {
-                    **{k: round(v, 2) for k, v in higher_ed_rates.items()},
-                    'average': round(higher_ed_avg, 2),
-                    'note': 'Total program cost (3-5 years)'
+                "uk": {
+                    "russell_group": 9.75,
+                    "standard_university": 9.59,
+                    "average": 9.67,
                 },
-                'coaching': {
-                    **{k: round(v, 2) for k, v in coaching_rates.items()},
-                    'average': round(coaching_avg, 2),
-                    'note': 'Annual coaching/tuition fees'
+                "germany": {
+                    "public_free_tuition": 7.11,
+                    "private_university": 9.35,
+                    "average": 8.23,
                 },
-                'international': {
+                "canada": {
+                    "top_universities": 9.30,
+                    "standard": 9.88,
+                    "average": 9.59,
+                },
+                "australia": {
+                    "group_of_eight": 7.97,
+                    "standard": 8.34,
+                    "average": 8.16,
+                },
+            }
+            international_avg = (
+                international_rates["usa"]["average"] * 0.35
+                + international_rates["uk"]["average"] * 0.20
+                + international_rates["germany"]["average"] * 0.15
+                + international_rates["canada"]["average"] * 0.20
+                + international_rates["australia"]["average"] * 0.10
+            )
+
+            program_costs_2025 = {
+                "usa_public": 41.0,
+                "usa_private": 80.3,
+                "uk_russell": 51.6,
+                "uk_standard": 39.2,
+                "germany_public": 15.3,
+                "canada_top": 47.1,
+                "australia_go8": 42.6,
+            }
+
+            return {
+                "cagr": round(overall_rate, 2),
+                "best_estimate": round(overall_rate, 2),
+                "total_inflation": round(((1 + overall_rate / 100) ** total_years - 1) * 100, 2),
+                "avg_yoy": round(overall_rate, 2),
+                "period": f"{first_year}-{last_year}",
+                "years": total_years,
+                "data_source": "India_Education_Inflation_Dataset_2005_2025_Combined.xlsx",
+                "description": "Children education cost inflation from combined education dataset",
+                "method_used": "weighted_average",
+                "data_points_used": len(annual_df),
+                "categories": {
+                    "school": {
+                        **{k: round(v, 2) for k, v in school_rates.items()},
+                        "average": round(school_avg, 2),
+                        "note": "CAGR from Summary_Stats sheet",
+                    },
+                    "higher_education": {
+                        **{k: round(v, 2) for k, v in higher_ed_rates.items()},
+                        "average": round(higher_ed_avg, 2),
+                        "note": "CAGR from Summary_Stats sheet",
+                    },
+                    "coaching": {
+                        **{k: round(v, 2) for k, v in coaching_rates.items()},
+                        "average": round(coaching_avg, 2),
+                        "note": "CAGR from Summary_Stats sheet",
+                    },
+                    "international": {
                     'usa': {
                         'public': round(international_rates['usa']['public_university'], 2),
                         'private_ivy': round(international_rates['usa']['private_ivy_league'], 2),
@@ -624,8 +619,11 @@ class InflationRatesProvider:
                         'ug_plus_pg': '6 years (After 10th to PG)'
                     }
                 }
+                },
             }
-        }
+        except Exception as e:
+            print(f"Error calculating education inflation from Excel: {e}")
+            return self._get_default_rates()["education"]
     
     def get_inflation_rate(self, category: str) -> Optional[Dict]:
         """Get inflation rate for a specific category"""
