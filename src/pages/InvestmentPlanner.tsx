@@ -165,7 +165,7 @@ const formatYears = (years?: number) => {
       const brandYoy = detailedInflationData?.car?.brand_yoy?.[carBrand] as Record<string, number> | undefined;
       if (brandYoy && Object.keys(brandYoy).length > 0) {
         const yearlyRates = Object.values(brandYoy);
-        const avgRate = yearlyRates.reduce((sum, value) => sum + Math.abs(value), 0) / yearlyRates.length;
+        const avgRate = yearlyRates.reduce((sum, value) => sum + value, 0) / yearlyRates.length;
         return toSafeRate(avgRate, inflationRates.car || 0.055);
       }
       return inflationRates.car || 0.055;
@@ -324,11 +324,20 @@ const formatYears = (years?: number) => {
       }
 
       const data: PortfolioRecommendation = await response.json();
+      
+      // Override backend's amounts because the backend endpoint only accepts `years: int`
+      // causing it to lose monthly precision for precise SIP calculations.
+      if (investmentType === "sip") {
+        data.monthly_sip = Math.ceil(futureValue / Math.max(1, months));
+      } else if (investmentType === "lumpsum") {
+        data.lumpsum_amount = Math.ceil(futureValue);
+      }
+
       setPortfolioRecommendation(data);
       setShowResults(true);
 
       const newGoalId = `goal-${Date.now()}`;
-      const calculatedMonthlySip = data.monthly_sip || (months ? futureValue / months : 0);
+      const calculatedMonthlySip = data.monthly_sip || 0;
       const calculatedLumpsum = data.lumpsum_amount || futureValue;
       const goalName = getGoalDisplayName();
 
@@ -370,14 +379,12 @@ const formatYears = (years?: number) => {
       if (investmentType === "lumpsum" && lumpsumAvailable) {
         const available = Number.parseFloat(lumpsumAvailable);
         const expectedReturn = data.expected_return || 0.08;
-        const projectedGrowth = available * Math.pow(1 + expectedReturn, years);
+        const projectedGrowth = available; // User requirement: DO NOT use compound math to fill the gap. Just treat it 1-to-1 funding.
         
         if (projectedGrowth < futureValue) {
           // Calculate hybrid SIP needed
           const r = expectedReturn / 12;
-          const sipToFillGap = r > 0 
-            ? (futureValue - projectedGrowth) * r / (Math.pow(1 + r, months) - 1)
-            : (futureValue - projectedGrowth) / months;
+          const sipToFillGap = (futureValue - projectedGrowth) / Math.max(1, months);
           
           baseGoal.isHybrid = true;
           baseGoal.hybridSip = Math.round(Math.max(0, sipToFillGap));
@@ -420,16 +427,16 @@ const formatYears = (years?: number) => {
       const portfolioRisk = riskAppetite === "high" ? 0.14 : riskAppetite === "medium" ? 0.09 : 0.05;
 
       const r = expectedReturn / 12;
-      const n = Math.max(months, 12);
-      const monthlySip = r > 0 ? futureValue * r / (Math.pow(1 + r, n) - 1) : futureValue / n;
-      const lumpsumAmount = futureValue / Math.pow(1 + expectedReturn, Math.max(years, 1));
+      const n = Math.max(months, 1); // Fix: allow SIP periods under 12 months
+      const monthlySip = futureValue / n;
+      const lumpsumAmount = futureValue;
 
       const fallbackData: PortfolioRecommendation = {
         portfolio: allocation,
         expected_return: expectedReturn,
         portfolio_risk: portfolioRisk,
-        monthly_sip: Math.round(monthlySip),
-        lumpsum_amount: Math.round(lumpsumAmount),
+        monthly_sip: Math.ceil(monthlySip),
+        lumpsum_amount: Math.ceil(lumpsumAmount),
         optimization_status: "rule_based",
         message: "Calculated locally (backend unavailable)",
       };
@@ -437,7 +444,7 @@ const formatYears = (years?: number) => {
       setShowResults(true);
 
       const newGoalId = `goal-${Date.now()}`;
-      const calculatedMonthlySip = fallbackData.monthly_sip || (months ? futureValue / months : 0);
+      const calculatedMonthlySip = fallbackData.monthly_sip || 0;
       const calculatedLumpsum = fallbackData.lumpsum_amount || futureValue;
       const goalName = getGoalDisplayName();
 
@@ -475,13 +482,11 @@ const formatYears = (years?: number) => {
       // Check if lumpsum investment needs a hybrid strategy (shortfall scenario)
       if (investmentType === "lumpsum" && lumpsumAvailable) {
         const available = Number.parseFloat(lumpsumAvailable);
-        const projectedGrowth = available * Math.pow(1 + expectedReturn, years);
+        const projectedGrowth = available; // Treat funds 1-to-1 against target, no compound
         
         if (projectedGrowth < futureValue) {
           // Calculate hybrid SIP needed
-          const sipToFillGap = r > 0 
-            ? (futureValue - projectedGrowth) * r / (Math.pow(1 + r, n) - 1)
-            : (futureValue - projectedGrowth) / n;
+          const sipToFillGap = (futureValue - projectedGrowth) / Math.max(1, n);
           
           baseGoal.isHybrid = true;
           baseGoal.hybridSip = Math.round(Math.max(0, sipToFillGap));
@@ -947,14 +952,14 @@ const formatYears = (years?: number) => {
                     const required = portfolioRecommendation.lumpsum_amount ?? 0;
                     const shortfall = required - available;
                     const expectedReturn = portfolioRecommendation.expected_return || 0.08;
-                    const projectedGrowth = available * Math.pow(1 + expectedReturn, results.years);
+                    const projectedGrowth = available; // No compound math
                     const willReachGoal = projectedGrowth >= results.futureValue;
                     
                     // Calculate hybrid SIP needed to bridge gap
                     const months = results.months || 12;
                     const r = expectedReturn / 12;
-                    const sipToFillGap = shortfall > 0 && r > 0 
-                      ? (results.futureValue - projectedGrowth) * r / (Math.pow(1 + r, months) - 1)
+                    const sipToFillGap = shortfall > 0 
+                      ? (results.futureValue - projectedGrowth) / Math.max(1, months)
                       : 0;
 
                     return (

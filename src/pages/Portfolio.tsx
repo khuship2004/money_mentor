@@ -666,15 +666,17 @@ const Portfolio = () => {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div className="p-3 bg-accent/10 rounded-lg">
                         <p className="text-xs text-muted-foreground">Inflation-adjusted target</p>
-                        <p className="text-lg font-bold">₹{(goal.inflatedValue || goal.goalAmount).toLocaleString("en-IN")}</p>
+                        <p className="text-lg font-bold">₹{Math.round(goal.inflatedValue || goal.goalAmount).toLocaleString("en-IN")}</p>
                       </div>
                       <div className="p-3 bg-accent/10 rounded-lg">
                         <p className="text-xs text-muted-foreground">Total contributions</p>
-                        <p className="text-lg font-bold">₹{totalPaid.toLocaleString("en-IN")}</p>
+                        <p className="text-lg font-bold">₹{Math.round(totalPaid).toLocaleString("en-IN")}</p>
                       </div>
                       <div className="p-3 bg-primary/10 rounded-lg border border-primary/20">
-                        <p className="text-xs text-muted-foreground">Wealth Created</p>
-                        <p className="text-lg font-bold text-success">Surplus ₹{Math.abs(difference).toLocaleString("en-IN")}</p>
+                        <p className="text-xs text-muted-foreground">Payment Method</p>
+                        <p className="text-lg font-bold text-primary">
+                          {goal.isHybrid ? "SIP & Lumpsum" : (goal.investmentType === "sip" ? "SIP" : "Lumpsum")}
+                        </p>
                       </div>
                     </div>
 
@@ -911,10 +913,12 @@ const Portfolio = () => {
             <AlertDialogDescription>
               {inflationPopup && (
                 <div className="space-y-2">
-                  <p>Current accumulated amount: ₹{inflationPopup.accumulated.toLocaleString("en-IN")}</p>
-                  <p>Updated inflation-adjusted required amount: ₹{inflationPopup.updatedValue.toLocaleString("en-IN")}</p>
-                  <p className="text-success">
-                    Estimated Surplus: ₹{Math.abs(inflationPopup.delta).toLocaleString("en-IN")}
+                  <p>Current accumulated amount: ₹{Math.round(inflationPopup.accumulated).toLocaleString("en-IN")}</p>
+                  <p>Updated inflation-adjusted required amount: ₹{Math.round(inflationPopup.updatedValue).toLocaleString("en-IN")}</p>
+                  <p className={inflationPopup.delta >= 0 ? "text-success" : "text-destructive"}>
+                    {inflationPopup.delta >= 0
+                      ? `Estimated Surplus: ₹${Math.round(inflationPopup.delta).toLocaleString("en-IN")}`
+                      : `Estimated Shortfall: ₹${Math.round(Math.abs(inflationPopup.delta)).toLocaleString("en-IN")}`}
                   </p>
                 </div>
               )}
