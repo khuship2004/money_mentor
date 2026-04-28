@@ -25,7 +25,7 @@ const formatYears = (years?: number) => {
   // Round to nearest 0.5
   const rounded = Math.round(years * 2) / 2;
   // If whole number, display without decimal
-  return rounded % 1 === 0 ? rounded.toString() : rounded.toFixed(1);
+  return rounded % 1 === 0 ? rounded.toString() : rounded.toFixed(2);
 };
 
 const GoalDetails = () => {
@@ -126,7 +126,7 @@ const GoalDetails = () => {
             <CardDescription>How inflation affects your financial goals</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-primary mb-1">{((goal.inflationRate || 0) * 100).toFixed(1)}% p.a.</p>
+            <p className="text-3xl font-bold text-primary mb-1">{((goal.inflationRate || 0) * 100).toFixed(2)}% p.a.</p>
             <p className="text-sm text-muted-foreground mb-4">Your purchasing power decreases by approximately ₹{Math.round((goal.inflationRate || 0.06) * 10000).toLocaleString("en-IN")} for every ₹10,000 annually</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="p-4 rounded-lg bg-accent/10">
@@ -180,7 +180,7 @@ const GoalDetails = () => {
                 <div className="p-4 rounded-lg border">
                   <p className="text-xs text-muted-foreground">Timeline</p>
                   <p className="text-lg font-bold">{formatYears(goal.years)} years</p>
-                  <p className="text-xs text-muted-foreground">Inflation rate: {((goal.inflationRate || 0) * 100).toFixed(1)}%</p>
+                  <p className="text-xs text-muted-foreground">Inflation rate: {((goal.inflationRate || 0) * 100).toFixed(2)}%</p>
                 </div>
               </div>
             </CardContent>

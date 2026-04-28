@@ -579,38 +579,38 @@ class InflationRatesProvider:
                     },
                     "international": {
                     'usa': {
-                        'public': round(international_rates['usa']['public_university'], 2),
-                        'private_ivy': round(international_rates['usa']['private_ivy_league'], 2),
-                        'average': round(international_rates['usa']['average'], 2),
+                        'public': international_rates['usa']['public_university'],
+                        'private_ivy': international_rates['usa']['private_ivy_league'],
+                        'average': international_rates['usa']['average'],
                         'cost_per_year_lakhs': program_costs_2025['usa_public'],
                         'cost_private_lakhs': program_costs_2025['usa_private']
                     },
                     'uk': {
-                        'russell_group': round(international_rates['uk']['russell_group'], 2),
-                        'standard': round(international_rates['uk']['standard_university'], 2),
-                        'average': round(international_rates['uk']['average'], 2),
+                        'russell_group': international_rates['uk']['russell_group'],
+                        'standard': international_rates['uk']['standard_university'],
+                        'average': international_rates['uk']['average'],
                         'cost_per_year_lakhs': program_costs_2025['uk_russell']
                     },
                     'germany': {
-                        'public_free_tuition': round(international_rates['germany']['public_free_tuition'], 2),
-                        'private': round(international_rates['germany']['private_university'], 2),
-                        'average': round(international_rates['germany']['average'], 2),
+                        'public_free_tuition': international_rates['germany']['public_free_tuition'],
+                        'private': international_rates['germany']['private_university'],
+                        'average': international_rates['germany']['average'],
                         'cost_per_year_lakhs': program_costs_2025['germany_public'],
                         'note': 'Public universities have FREE tuition - only living costs'
                     },
                     'canada': {
-                        'top_universities': round(international_rates['canada']['top_universities'], 2),
-                        'standard': round(international_rates['canada']['standard'], 2),
-                        'average': round(international_rates['canada']['average'], 2),
+                        'top_universities': international_rates['canada']['top_universities'],
+                        'standard': international_rates['canada']['standard'],
+                        'average': international_rates['canada']['average'],
                         'cost_per_year_lakhs': program_costs_2025['canada_top']
                     },
                     'australia': {
-                        'group_of_eight': round(international_rates['australia']['group_of_eight'], 2),
-                        'standard': round(international_rates['australia']['standard'], 2),
-                        'average': round(international_rates['australia']['average'], 2),
+                        'group_of_eight': international_rates['australia']['group_of_eight'],
+                        'standard': international_rates['australia']['standard'],
+                        'average': international_rates['australia']['average'],
                         'cost_per_year_lakhs': program_costs_2025['australia_go8']
                     },
-                    'average': round(international_avg, 2),
+                    'average': international_avg,
                     'note': 'Inflation for Indian students (includes INR depreciation)',
                     'period': '2010-2025',
                     'program_durations': {

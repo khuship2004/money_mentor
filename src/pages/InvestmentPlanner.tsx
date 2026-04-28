@@ -75,7 +75,7 @@ const InvestmentPlanner = () => {
 const formatYears = (years?: number) => {
   if (!years) return "0";
   const rounded = Math.round(years * 2) / 2;
-  return rounded % 1 === 0 ? rounded.toString() : rounded.toFixed(1);
+  return rounded % 1 === 0 ? rounded.toString() : rounded.toFixed(2);
 };
 
   // Asset-specific inflation rates (fetched from backend models)
@@ -157,7 +157,7 @@ const formatYears = (years?: number) => {
 
   const toSafeRate = (value: unknown, fallback: number) => {
     if (typeof value !== "number" || Number.isNaN(value)) return fallback;
-    return Math.max(0, value / 100);
+    return value / 100;
   };
 
   const getSelectedInflationRate = () => {
@@ -202,7 +202,7 @@ const formatYears = (years?: number) => {
     if (goalType === "house" && realEstateCity) return `House (${realEstateCity})`;
     if (goalType === "education") {
       if (educationType === "higher_studies" && educationCountry) {
-        return `Education (Higher Studies - ${educationCountry.toUpperCase()})`;
+        return `Education (International Higher Education - ${educationCountry.toUpperCase()})`;
       }
       if (educationType) {
         const labelMap: Record<string, string> = {
@@ -582,16 +582,16 @@ const formatYears = (years?: number) => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="car">
-                      Buy a Car ({((inflationRates.car || 0.055) * 100).toFixed(1)}% inflation)
+                      Buy a Car ({((inflationRates.car || 0.055) * 100).toFixed(2)}% inflation)
                     </SelectItem>
                     <SelectItem value="house">
-                      Buy a House ({((inflationRates.house || 0.0726) * 100).toFixed(1)}% inflation)
+                      Buy a House ({((inflationRates.house || 0.0726) * 100).toFixed(2)}% inflation)
                     </SelectItem>
                     <SelectItem value="education">
-                      Child's Education ({((inflationRates.education || 0.115) * 100).toFixed(1)}% inflation)
+                      Child's Education ({((inflationRates.education || 0.115) * 100).toFixed(2)}% inflation)
                     </SelectItem>
                     <SelectItem value="gold">
-                      Gold Investment ({((inflationRates.gold || 0.1403) * 100).toFixed(1)}% inflation)
+                      Gold Investment ({((inflationRates.gold || 0.1403) * 100).toFixed(2)}% inflation)
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -652,7 +652,7 @@ const formatYears = (years?: number) => {
                         <SelectItem value="school">School</SelectItem>
                         <SelectItem value="higher_education">Higher Education</SelectItem>
                         <SelectItem value="coaching">Coaching</SelectItem>
-                        <SelectItem value="higher_studies">Higher Studies</SelectItem>
+                        <SelectItem value="higher_studies">International Higher Education</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -843,7 +843,7 @@ const formatYears = (years?: number) => {
                       <p className="text-sm text-muted-foreground">Predicted Future Value ({results.months} months)</p>
                       <p className="text-3xl font-bold text-primary">₹{results.futureValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
                       <Badge variant="secondary">
-                        +{((results.inflationRate * 100).toFixed(1))}% annual inflation
+                        {results.inflationRate >= 0 ? '+' : ''}{((results.inflationRate * 100).toFixed(2))}% annual inflation
                       </Badge>
                     </div>
                     <div className="pt-2">
@@ -892,7 +892,7 @@ const formatYears = (years?: number) => {
                   <div className="space-y-3">
                     <h3 className="font-semibold">Asset Allocation</h3>
                     {Object.entries(portfolioRecommendation.portfolio).map(([asset, weight]) => {
-                      const percentage = (weight * 100).toFixed(1);
+                      const percentage = (weight * 100).toFixed(2);
                       return (
                         <div key={asset} className="space-y-1">
                           <div className="flex justify-between text-sm">
@@ -992,7 +992,7 @@ const formatYears = (years?: number) => {
                               <div className="p-3 bg-background rounded-lg">
                                 <p className="text-lg font-bold text-success">₹{Math.round(projectedGrowth).toLocaleString('en-IN')}</p>
                                 <p className="text-xs text-muted-foreground">
-                                  In {formatYears(results.years)} years @ {(expectedReturn * 100).toFixed(1)}% returns
+                                  In {formatYears(results.years)} years @ {(expectedReturn * 100).toFixed(2)}% returns
                                 </p>
                               </div>
                             </div>
@@ -1130,7 +1130,7 @@ const formatYears = (years?: number) => {
                       doc.setTextColor(0, 0, 0);
                       doc.setFontSize(20);
                       doc.setFont("helvetica", "bold");
-                      doc.text(`${((goalData.inflationRate || 0.06) * 100).toFixed(1)}% p.a.`, 20, yPos + 26);
+                      doc.text(`${((goalData.inflationRate || 0.06) * 100).toFixed(2)}% p.a.`, 20, yPos + 26);
                       
                       doc.setTextColor(...mutedColor);
                       doc.setFontSize(8);
@@ -1241,7 +1241,7 @@ const formatYears = (years?: number) => {
                       doc.setTextColor(...mutedColor);
                       doc.setFontSize(8);
                       doc.setFont("helvetica", "normal");
-                      doc.text(`Inflation rate: ${((goalData.inflationRate || 0.06) * 100).toFixed(1)}%`, 18 + halfWidth + 7, yPos + 26);
+                      doc.text(`Inflation rate: ${((goalData.inflationRate || 0.06) * 100).toFixed(2)}%`, 18 + halfWidth + 7, yPos + 26);
                       
                       yPos += 42;
                       
@@ -1272,7 +1272,7 @@ const formatYears = (years?: number) => {
                           doc.setFontSize(9);
                           doc.setFont("helvetica", "normal");
                           doc.text(asset, 24, yPos + 5);
-                          doc.text(`${percentage.toFixed(1)}%`, pageWidth - 14, yPos + 5, { align: "right" });
+                          doc.text(`${percentage.toFixed(2)}%`, pageWidth - 14, yPos + 5, { align: "right" });
                           
                           // Progress bar
                           doc.setFillColor(230, 230, 230);

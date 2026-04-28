@@ -43,7 +43,7 @@ const API_BASE_URL = "http://localhost:8000";
 const formatYears = (years?: number) => {
   if (!years) return "0";
   const rounded = Math.round(years * 2) / 2;
-  return rounded % 1 === 0 ? rounded.toString() : rounded.toFixed(1);
+  return rounded % 1 === 0 ? rounded.toString() : rounded.toFixed(2);
 };
 
 const Dashboard = () => {
@@ -119,7 +119,7 @@ const Dashboard = () => {
 
   const avgInflationRate = useMemo(() => {
     const rates = Object.values(inflationData).map(d => d.rate);
-    return rates.length > 0 ? Number((rates.reduce((a, b) => a + b, 0) / rates.length).toFixed(1)) : 6.5;
+    return rates.length > 0 ? Number((rates.reduce((a, b) => a + b, 0) / rates.length).toFixed(2)) : 6.5;
   }, [inflationData]);
 
   const totalGoalAmount = goals.reduce((sum, g) => sum + g.goalAmount, 0);
@@ -339,7 +339,7 @@ const Dashboard = () => {
                                             <div className="flex items-center justify-between">
                                               <p className="text-xs font-semibold">{brand}</p>
                                               <span className="text-[11px] font-semibold text-primary">
-                                                Avg: {(Math.abs(Object.values(series).reduce((sum, value) => sum + value, 0) / Math.max(Object.values(series).length, 1))).toFixed(2)}%
+                                                Avg: {(Object.values(series).reduce((sum, value) => sum + value, 0) / Math.max(Object.values(series).length, 1)).toFixed(2)}%
                                               </span>
                                             </div>
                                             <div className="grid grid-cols-3 gap-1 text-[11px]">
@@ -348,7 +348,7 @@ const Dashboard = () => {
                                                 .map(([year, yoy]) => (
                                                   <div key={year} className="flex justify-between bg-muted rounded px-1 py-0.5">
                                                     <span className="text-muted-foreground">{year}</span>
-                                                    <span className="font-semibold">{Math.abs(yoy as number).toFixed(1)}%</span>
+                                                    <span className="font-semibold">{(yoy as number).toFixed(2)}%</span>
                                                   </div>
                                                 ))}
                                             </div>
@@ -375,7 +375,7 @@ const Dashboard = () => {
                                         .map(([city, rate]) => (
                                           <div key={city} className="flex justify-between p-2 bg-muted rounded-md">
                                             <span className="text-muted-foreground">{city}</span>
-                                            <span className="font-semibold">{rate.toFixed(1)}%</span>
+                                            <span className="font-semibold">{rate.toFixed(2)}%</span>
                                           </div>
                                         ))}
                                     </div>
@@ -402,7 +402,7 @@ const Dashboard = () => {
                                                 .map(([key, value]) => (
                                                 <div key={key} className="flex justify-between">
                                                   <span className="text-muted-foreground capitalize">{key.replaceAll('_', ' ')}</span>
-                                                  <span>{typeof value === 'number' ? `${value.toFixed(1)}%` : value}</span>
+                                                  <span>{typeof value === 'number' ? `${value.toFixed(2)}%` : value}</span>
                                                 </div>
                                               ))}
                                             </div>
@@ -438,7 +438,7 @@ const Dashboard = () => {
                                               <span className="font-semibold flex items-center gap-1">
                                                 <span>{flags[country]}</span> {names[country]}
                                               </span>
-                                              <span className="text-primary font-bold">{countryData.average?.toFixed(1)}%</span>
+                                              <span className="text-primary font-bold">{countryData.average?.toFixed(2)}%</span>
                                             </div>
                                             <div className="grid grid-cols-2 gap-1 text-xs">
                                               {Object.entries(countryData)
@@ -449,7 +449,7 @@ const Dashboard = () => {
                                                   if (isCostField) {
                                                     displayValue = `₹${String(value)}L/yr`;
                                                   } else if (typeof value === 'number') {
-                                                    displayValue = `${value.toFixed(1)}%`;
+                                                    displayValue = `${value.toFixed(2)}%`;
                                                   } else {
                                                     displayValue = String(value);
                                                   }
@@ -490,7 +490,7 @@ const Dashboard = () => {
                                         <div className="flex justify-between items-center">
                                           <span className="font-semibold text-sm">🌍 Avg International Inflation</span>
                                           <span className="text-blue-600 dark:text-blue-400 font-bold text-lg">
-                                            {rateData.categories.international.average?.toFixed(1)}%
+                                            {rateData.categories.international.average?.toFixed(2)}%
                                           </span>
                                         </div>
                                         <p className="text-xs text-muted-foreground mt-1">
@@ -517,7 +517,7 @@ const Dashboard = () => {
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div className="flex items-baseline gap-2 cursor-help">
-                              <p className="text-2xl font-bold text-primary">{rateData?.rate?.toFixed(1) || "N/A"}%</p>
+                              <p className="text-2xl font-bold text-primary">{rateData?.rate?.toFixed(2) || "N/A"}%</p>
                               <span className="text-xs text-muted-foreground">{rateData?.method_used || "CAGR"}</span>
                             </div>
                           </TooltipTrigger>
@@ -603,12 +603,12 @@ const Dashboard = () => {
                         </div>
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">Inflation Impact</span>
-                          <span className="font-semibold">+{inflation.toFixed(1)}%</span>
+                          <span className="font-semibold">{inflation > 0 ? '+' : ''}{inflation.toFixed(2)}%</span>
                         </div>
                         <div className="space-y-2">
                           <div className="flex justify-between text-xs text-muted-foreground">
                             <span>Inflation</span>
-                            <span>{inflation.toFixed(1)}%</span>
+                            <span>{inflation.toFixed(2)}%</span>
                           </div>
                           <Progress value={Math.min(inflation, 100)} className="h-2" />
                         </div>
