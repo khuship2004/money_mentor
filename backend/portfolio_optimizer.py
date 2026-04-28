@@ -225,34 +225,34 @@ class PortfolioOptimizer:
     
 def calculate_sip(future_value: float, annual_return: float, years: int) -> float:
     """
-    Calculate monthly SIP amount required
+    Calculate monthly SIP amount required.
+    User requested: change the calculation in such a way that the SIP amount 
+    should always be in such a way that after all installments are finished 
+    the contribution should be more than the inflated predicted price.
     
-    Formula: SIP = FV * r / ((1 + r)^n - 1)
-    where r = monthly return, n = number of months
+    This means we ignore the power of compounding for the contribution check
+    and just divide the future value by the number of months. 
     """
     try:
-        r = annual_return / 12
         n = years * 12
+        if n == 0:
+            return future_value
         
-        if r == 0:
-            return future_value / n
-        
-        sip = future_value * r / ((1 + r)**n - 1)
+        # User explicitly requested that Total Output (SIP * n) >= Future Value. 
+        # By removing the compound return factor, the user directly funds the entire inflated price over time.
+        sip = future_value / n
         return round(sip, 2)
     except Exception as e:
         print(f"Error calculating SIP: {e}")
         return 0.0
 
-
 def calculate_lumpsum(future_value: float, annual_return: float, years: int) -> float:
     """
     Calculate lumpsum amount required
-    
-    Formula: PV = FV / (1 + r)^n
+    User requested the contribution should be > inflated predicted price.
     """
     try:
-        pv = future_value / ((1 + annual_return) ** years)
-        return round(pv, 2)
+        return round(future_value, 2)
     except Exception as e:
         print(f"Error calculating lumpsum: {e}")
         return 0.0

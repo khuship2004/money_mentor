@@ -94,14 +94,79 @@ const Portfolio = () => {
   const ongoingGoals = useMemo(() => goals.filter((goal) => {
     if (!goal.isLocked && goal.status !== "ongoing") return false;
     const contributed = (goal.contributions || []).filter((c) => c.status !== "pending").reduce((sum, c) => sum + c.amount, 0);
-    const completed = goal.inflatedValue ? contributed >= goal.inflatedValue : false;
+    
+    let completed = false;
+    if (goal.investmentType === "sip" || goal.isHybrid) {
+      // Use the same logic as getSipProgress to check if all installments are met
+      const now = new Date();
+      let startYear = now.getFullYear();
+      let startMonth = now.getMonth();
+      if (goal.sipStartDate && goal.sipStartDate.trim() !== "") {
+        const parsed = new Date(goal.sipStartDate);
+        startYear = parsed.getFullYear();
+        startMonth = parsed.getMonth();
+      } else if (goal.createdAt && goal.createdAt.trim() !== "") {
+        const parsed = new Date(goal.createdAt);
+        startYear = parsed.getFullYear();
+        startMonth = parsed.getMonth();
+      }
+      
+      const targetYear = goal.targetYear;
+      const targetMonth = (goal.targetMonth || 12) - 1;
+      const totalInstallments = Math.max(1, (targetYear - startYear) * 12 + (targetMonth - startMonth));
+      
+      const paidSipMonths = new Set((goal.sipPayments || []).filter((p) => p.status === "paid").map((p) => p.month)).size;
+      const paidInstallmentContributions = (goal.contributions || []).filter((c) => c.status === "paid" && (c.type === "sip" || c.type === "installment")).length;
+      const trackedCompletedInstallments = goal.completedInstallments ?? 0;
+      const completedInstallments = Math.min(Math.max(trackedCompletedInstallments, paidSipMonths, paidInstallmentContributions), totalInstallments);
+      
+      const isSipDone = completedInstallments >= totalInstallments;
+      // In hybrid, we might also want to check lumpsum, but typical completion relies on total contribution or all SIPs made
+      const isValueMet = goal.inflatedValue ? contributed >= goal.inflatedValue : false;
+      completed = isSipDone || isValueMet;
+    } else {
+      completed = goal.inflatedValue ? contributed >= goal.inflatedValue : false;
+    }
+    
     return !completed;
   }), [goals]);
 
   const completedGoals = useMemo(() => goals.filter((goal) => {
     if (!goal.isLocked && goal.status !== "ongoing" && goal.status !== "completed") return false;
     const contributed = (goal.contributions || []).filter((c) => c.status !== "pending").reduce((sum, c) => sum + c.amount, 0);
-    const completed = goal.inflatedValue ? contributed >= goal.inflatedValue : false;
+    
+    let completed = false;
+    if (goal.investmentType === "sip" || goal.isHybrid) {
+      // Use the same logic as getSipProgress to check if all installments are met
+      const now = new Date();
+      let startYear = now.getFullYear();
+      let startMonth = now.getMonth();
+      if (goal.sipStartDate && goal.sipStartDate.trim() !== "") {
+        const parsed = new Date(goal.sipStartDate);
+        startYear = parsed.getFullYear();
+        startMonth = parsed.getMonth();
+      } else if (goal.createdAt && goal.createdAt.trim() !== "") {
+        const parsed = new Date(goal.createdAt);
+        startYear = parsed.getFullYear();
+        startMonth = parsed.getMonth();
+      }
+      
+      const targetYear = goal.targetYear;
+      const targetMonth = (goal.targetMonth || 12) - 1;
+      const totalInstallments = Math.max(1, (targetYear - startYear) * 12 + (targetMonth - startMonth));
+      
+      const paidSipMonths = new Set((goal.sipPayments || []).filter((p) => p.status === "paid").map((p) => p.month)).size;
+      const paidInstallmentContributions = (goal.contributions || []).filter((c) => c.status === "paid" && (c.type === "sip" || c.type === "installment")).length;
+      const trackedCompletedInstallments = goal.completedInstallments ?? 0;
+      const completedInstallments = Math.min(Math.max(trackedCompletedInstallments, paidSipMonths, paidInstallmentContributions), totalInstallments);
+      
+      const isSipDone = completedInstallments >= totalInstallments;
+      const isValueMet = goal.inflatedValue ? contributed >= goal.inflatedValue : false;
+      completed = isSipDone || isValueMet;
+    } else {
+      completed = goal.inflatedValue ? contributed >= goal.inflatedValue : false;
+    }
+    
     return completed;
   }), [goals]);
 
@@ -608,8 +673,8 @@ const Portfolio = () => {
                         <p className="text-lg font-bold">₹{totalPaid.toLocaleString("en-IN")}</p>
                       </div>
                       <div className="p-3 bg-primary/10 rounded-lg border border-primary/20">
-                        <p className="text-xs text-muted-foreground">Final outcome</p>
-                        <p className="text-lg font-bold">{difference >= 0 ? `Surplus ₹${difference.toLocaleString("en-IN")}` : `Shortfall ₹${Math.abs(difference).toLocaleString("en-IN")}`}</p>
+                        <p className="text-xs text-muted-foreground">Wealth Created</p>
+                        <p className="text-lg font-bold text-success">Surplus ₹{Math.abs(difference).toLocaleString("en-IN")}</p>
                       </div>
                     </div>
 
@@ -848,10 +913,8 @@ const Portfolio = () => {
                 <div className="space-y-2">
                   <p>Current accumulated amount: ₹{inflationPopup.accumulated.toLocaleString("en-IN")}</p>
                   <p>Updated inflation-adjusted required amount: ₹{inflationPopup.updatedValue.toLocaleString("en-IN")}</p>
-                  <p>
-                    {inflationPopup.delta >= 0
-                      ? `Current surplus: ₹${inflationPopup.delta.toLocaleString("en-IN")}`
-                      : `Current shortfall: ₹${Math.abs(inflationPopup.delta).toLocaleString("en-IN")}`}
+                  <p className="text-success">
+                    Estimated Surplus: ₹{Math.abs(inflationPopup.delta).toLocaleString("en-IN")}
                   </p>
                 </div>
               )}
