@@ -66,14 +66,15 @@ const GoalDetails = () => {
   const goalName = goal.goalName || goal.goalType;
   const targetLabel = formatMonthYear(goal.targetMonth, goal.targetYear);
   const investmentLabel = goal.investmentType === "sip" ? "Monthly SIP" : "Lumpsum";
-  const investmentAmount = goal.investmentType === "sip" ? goal.monthlySip : goal.lumpsumAmount;
-
   const expectedReturnRate = goal.expectedReturn || 0.12;
   const n = (goal.years || 1) * 12;
-  const P = goal.monthlySip || 0;
   const r = expectedReturnRate / 12;
-  const futureValueCompounded = P * ((Math.pow(1 + r, n) - 1) / r) * (1 + r);
-  const estimatedReturns = Math.max(0, futureValueCompounded - (P * n));
+  
+  const targetFV = goal.inflatedValue || goal.goalAmount;
+  const calculatedSip = targetFV / (((Math.pow(1 + r, n) - 1) / r) * (1 + r));
+  
+  const investmentAmount = goal.investmentType === "sip" ? calculatedSip : goal.lumpsumAmount;
+  const estimatedReturns = Math.max(0, targetFV - (calculatedSip * n));
 
   const totalContributed = (goal.contributions || []).filter((c) => c.status !== "pending").reduce((sum, c) => sum + c.amount, 0);
   const progress = goal.inflatedValue ? Math.min((totalContributed / goal.inflatedValue) * 100, 100) : 0;
@@ -237,7 +238,7 @@ const GoalDetails = () => {
               </div>
               {goal.investmentType === "sip" && (
                 <div className="mt-4 pt-4 border-t grid grid-cols-2 gap-4 text-sm">
-                  <div><p className="text-muted-foreground">Net Investment</p><p className="font-semibold">₹{((goal.monthlySip || 0) * (goal.years || 1) * 12).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</p></div>
+                  <div><p className="text-muted-foreground">Net Investment</p><p className="font-semibold">₹{(calculatedSip * n).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</p></div>
                     <div><p className="text-muted-foreground">Estimated Returns</p><p className="font-semibold text-success">₹{estimatedReturns.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</p></div>
                 </div>
               )}

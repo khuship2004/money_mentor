@@ -328,7 +328,10 @@ const formatYears = (years?: number) => {
       // Override backend's amounts because the backend endpoint only accepts `years: int`
       // causing it to lose monthly precision for precise SIP calculations.
       if (investmentType === "sip") {
-        data.monthly_sip = Math.ceil(futureValue / Math.max(1, months));
+        const expectedReturnRate = data.expected_return || 0.12;
+        const r = expectedReturnRate / 12;
+        const n = Math.max(1, months);
+        data.monthly_sip = Math.ceil(futureValue / (((Math.pow(1 + r, n) - 1) / r) * (1 + r)));
       } else if (investmentType === "lumpsum") {
         data.lumpsum_amount = Math.ceil(futureValue);
       }
@@ -428,7 +431,7 @@ const formatYears = (years?: number) => {
 
       const r = expectedReturn / 12;
       const n = Math.max(months, 1); // Fix: allow SIP periods under 12 months
-      const monthlySip = futureValue / n;
+      const monthlySip = futureValue / (((Math.pow(1 + r, n) - 1) / r) * (1 + r));
       const lumpsumAmount = futureValue;
 
       const fallbackData: PortfolioRecommendation = {
